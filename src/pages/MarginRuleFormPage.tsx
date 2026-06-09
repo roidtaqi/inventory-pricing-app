@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type MarginRule } from '../db/db';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Save } from 'lucide-react';
 
 export default function MarginRuleFormPage() {
   const { id } = useParams();
@@ -85,12 +85,16 @@ export default function MarginRuleFormPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen pb-20">
+    <div className="bg-background min-h-screen pb-24">
       <div className="bg-surface border-b border-border p-4 sticky top-0 z-10 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-textMain" />
         </button>
-        <h1 className="text-xl font-bold">{isEdit ? 'Edit Margin' : 'Tambah Margin'}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-xl font-bold">{isEdit ? 'Edit Margin' : 'Tambah Margin'}</h1>
+        <button onClick={handleSave} className="btn-primary flex items-center gap-1.5 px-3 py-2 text-sm">
+          <Save className="h-4 w-4" />
+          Simpan
+        </button>
       </div>
 
       <div className="p-4 max-w-md mx-auto space-y-4">
@@ -171,9 +175,9 @@ export default function MarginRuleFormPage() {
           </div>
         </div>
 
-        <button onClick={handleSave} className="btn-primary w-full py-3 mt-4 text-lg">
-          Simpan Aturan
-        </button>
+        <div className="rounded-lg bg-indigo-50 p-3 text-sm text-indigo-800">
+          Prioritas otomatis: Product, Brand, Supplier, Kategori, Default.
+        </div>
       </div>
     </div>
   );
