@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, Database, History, Settings } from 'lucide-react';
+import { ChevronRight, Database, FileSpreadsheet, History, Settings } from 'lucide-react';
 
 const menuItems = [
   {
@@ -13,6 +13,12 @@ const menuItems = [
     title: 'Master Data',
     description: 'Kategori, brand, dan supplier',
     icon: Database,
+  },
+  {
+    to: '/import-csv',
+    title: 'Import CSV',
+    description: 'Produk, satuan, dan modal',
+    icon: FileSpreadsheet,
   },
   {
     to: '/settings',

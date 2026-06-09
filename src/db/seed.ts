@@ -1,4 +1,5 @@
 import { db, type Product } from './db';
+import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
 
 const APP_NAME = 'Kalkulator Tekad Mandiri';
 const LEGACY_APP_NAME = 'Inventory & Pricing Calculator';
@@ -32,14 +33,43 @@ const ensureCoreSettings = async () => {
   }
 };
 
+const ensureInitialCostHistories = async () => {
+  const units = await db.productUnits.toArray();
+
+  for (const unit of units) {
+    if (!unit.id) continue;
+    const existingHistory = await db.productUnitCostHistories.where('productUnitId').equals(unit.id).first();
+    if (existingHistory) continue;
+
+    const product = await db.products.get(unit.productId);
+    await db.productUnitCostHistories.add(
+      ProductUnitCostHistoryService.build({
+        productId: unit.productId,
+        productUnitId: unit.id,
+        supplierId: product?.supplierId,
+        inputCost: unit.manualCost,
+        ppnMode: 'NO_PPN',
+        ppnRate: 0,
+        baseCost: unit.manualCost,
+        ppnAmount: 0,
+        finalCost: unit.manualCost,
+        source: 'SEED',
+        notes: 'Baseline modal dari data yang sudah ada',
+        createdBy: 'System',
+      }),
+    );
+  }
+};
+
 export const seedDatabase = async () => {
   const categoriesCount = await db.categories.count();
   if (categoriesCount > 0) {
     await ensureCoreSettings();
+    await ensureInitialCostHistories();
     return;
   }
 
-  await db.transaction('rw', [db.categories, db.brands, db.suppliers, db.products, db.productUnits, db.marginRules, db.appSettings], async () => {
+  await db.transaction('rw', [db.categories, db.brands, db.suppliers, db.products, db.productUnits, db.productUnitCostHistories, db.marginRules, db.appSettings], async () => {
     const categories = {
       mie: await db.categories.add({ name: 'Mie Instan', isActive: true }),
       minuman: await db.categories.add({ name: 'Minuman', isActive: true }),
@@ -140,7 +170,7 @@ export const seedDatabase = async () => {
 
     await db.products.bulkAdd(products);
 
-    await db.productUnits.bulkAdd([
+    const productUnits = [
       {
         id: 'unit-indomie-pcs',
         productId: 'prod-indomie-goreng',
@@ -221,7 +251,29 @@ export const seedDatabase = async () => {
         minSellingPrice: 28500,
         maxSellingPrice: 34000,
       },
-    ]);
+    ];
+
+    await db.productUnits.bulkAdd(productUnits);
+
+    await db.productUnitCostHistories.bulkAdd(
+      productUnits.map(unit => {
+        const product = products.find(item => item.id === unit.productId);
+        return ProductUnitCostHistoryService.build({
+          productId: unit.productId,
+          productUnitId: unit.id,
+          supplierId: product?.supplierId,
+          inputCost: unit.manualCost,
+          ppnMode: 'NO_PPN',
+          ppnRate: 0,
+          baseCost: unit.manualCost,
+          ppnAmount: 0,
+          finalCost: unit.manualCost,
+          source: 'SEED',
+          notes: 'Modal awal sample data',
+          createdBy: 'System',
+        });
+      }),
+    );
 
     await db.marginRules.bulkAdd([
       {

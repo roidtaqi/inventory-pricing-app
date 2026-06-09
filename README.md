@@ -130,6 +130,7 @@ Rounding default adalah ribuan terdekat:
 - Settings PPN, margin default, app name, export JSON
 - Seed data produk sembako/minimarket
 - Installable PWA untuk iOS dan Android
+- Import CSV katalog produk, satuan, supplier, dan modal
 
 ## Install di Android
 
@@ -164,6 +165,8 @@ src/services
   MarginRuleResolver.ts
   ApprovalService.ts
   PriceHistoryService.ts
+  ProductUnitCostHistoryService.ts
+  CsvImportService.ts
 
 src/pages
   CalculatorPage.tsx
@@ -175,7 +178,25 @@ src/pages
   HistoryPage.tsx
   SettingsPage.tsx
   MasterDataPage.tsx
+  ImportCsvPage.tsx
 ```
+
+## Format CSV Produk
+
+Import CSV tersedia dari `Lainnya -> Import CSV`. Kolom yang didukung:
+
+```csv
+sku,name,category,brand,supplier,unit_name,conversion_to_base,manual_cost,active_selling_price,min_selling_price,max_selling_price,barcode,pricing_mode,ppn_mode,ppn_rate,effective_date,notes
+```
+
+Kolom wajib:
+
+- `sku`
+- `name`
+- `unit_name`
+- `manual_cost`
+
+Nilai `pricing_mode` mendukung `AUTO_MARGIN`, `MANUAL_PRICE`, `LOCKED_PRICE`. Nilai `ppn_mode` mendukung `NO_PPN`, `PPN_INCLUDED`, `PPN_EXCLUDED`. Saat import berhasil, aplikasi akan membuat/update produk, kategori, brand, supplier, satuan, dan mencatat riwayat modal per satuan.
 
 ## Sample Data
 

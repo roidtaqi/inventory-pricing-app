@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Product, type ProductUnit } from '../db/db';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
+import { formatCurrency } from '../utils/format';
 
 export default function ProductFormPage() {
   const { id } = useParams();
@@ -12,6 +14,10 @@ export default function ProductFormPage() {
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const brands = useLiveQuery(() => db.brands.toArray()) || [];
   const suppliers = useLiveQuery(() => db.suppliers.toArray()) || [];
+  const loadedCostHistories = useLiveQuery(
+    () => isEdit && id ? db.productUnitCostHistories.where('productId').equals(id).toArray() : [],
+    [isEdit, id],
+  );
 
   const [sku, setSku] = useState('');
   const [name, setName] = useState('');
@@ -24,6 +30,7 @@ export default function ProductFormPage() {
   const [notes, setNotes] = useState('');
   
   const [units, setUnits] = useState<Partial<ProductUnit>[]>([]);
+  const costHistories = (loadedCostHistories ?? []).sort((a, b) => b.createdAt - a.createdAt);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -125,7 +132,7 @@ export default function ProductFormPage() {
         }
       }
 
-      await db.transaction('rw', db.products, db.productUnits, async () => {
+      await db.transaction('rw', db.products, db.productUnits, db.productUnitCostHistories, async () => {
         const productData: Product = {
           id: productId,
           sku: trimmedSku,
@@ -141,16 +148,51 @@ export default function ProductFormPage() {
 
         await db.products.put(productData);
 
-        if (isEdit) {
-            await db.productUnits.where('productId').equals(productId).delete();
-        }
-        
+        const existingUnits = await db.productUnits.where('productId').equals(productId).toArray();
+        const nextUnitIds = new Set<string>();
+
         for (const u of units) {
-            await db.productUnits.add({
-                ...u,
-                id: crypto.randomUUID(),
-                productId: productId
-            } as ProductUnit);
+            const unitId = u.id || crypto.randomUUID();
+            const existingUnit = existingUnits.find(unit => unit.id === unitId);
+            const unitData: ProductUnit = {
+                id: unitId,
+                productId,
+                unitName: u.unitName!.trim(),
+                conversionToBase: Number(u.conversionToBase),
+                manualCost: Number(u.manualCost),
+                activeSellingPrice: Number(u.activeSellingPrice),
+                minSellingPrice: u.minSellingPrice,
+                maxSellingPrice: u.maxSellingPrice,
+            };
+
+            await db.productUnits.put(unitData);
+            nextUnitIds.add(unitId);
+
+            if (!existingUnit || existingUnit.manualCost !== unitData.manualCost) {
+              await db.productUnitCostHistories.add(
+                ProductUnitCostHistoryService.build({
+                  productId,
+                  productUnitId: unitId,
+                  supplierId: productData.supplierId,
+                  inputCost: unitData.manualCost,
+                  ppnMode: 'NO_PPN',
+                  ppnRate: 0,
+                  baseCost: unitData.manualCost,
+                  ppnAmount: 0,
+                  finalCost: unitData.manualCost,
+                  previousFinalCost: existingUnit?.manualCost,
+                  source: 'PRODUCT_FORM',
+                  notes: existingUnit ? 'Update modal dari form produk' : 'Modal awal dari form produk',
+                  createdBy: 'Admin Lokal',
+                }),
+              );
+            }
+        }
+
+        for (const existingUnit of existingUnits) {
+          if (existingUnit.id && !nextUnitIds.has(existingUnit.id)) {
+            await db.productUnits.delete(existingUnit.id);
+          }
         }
       });
       navigate('/products');
@@ -158,6 +200,17 @@ export default function ProductFormPage() {
       console.error(error);
       alert("Gagal menyimpan produk");
     }
+  };
+
+  const getUnitName = (unitId: string) => {
+    return units.find(unit => unit.id === unitId)?.unitName || 'Satuan lama';
+  };
+
+  const getSourceLabel = (source: string) => {
+    if (source === 'APPROVAL') return 'Approval';
+    if (source === 'CSV_IMPORT') return 'CSV';
+    if (source === 'SEED') return 'Sample';
+    return 'Form Produk';
   };
 
   return (
@@ -276,6 +329,48 @@ export default function ProductFormPage() {
             </div>
           ))}
         </div>
+
+        {isEdit && (
+          <div className="card space-y-3">
+            <h2 className="font-bold text-primary">Riwayat Modal</h2>
+            {costHistories.length === 0 && (
+              <div className="rounded-lg bg-gray-50 p-4 text-center text-sm text-textMuted">
+                Belum ada riwayat modal
+              </div>
+            )}
+            {costHistories.map(history => (
+              <div key={history.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-bold text-textMain">{getUnitName(history.productUnitId)}</div>
+                    <div className="mt-0.5 text-xs text-textMuted">
+                      {new Date(history.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  <span className="rounded bg-indigo-50 px-2 py-1 text-[10px] font-bold text-primary">
+                    {getSourceLabel(history.source)}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded bg-gray-50 p-2">
+                    <div className="text-xs text-textMuted">Modal Sebelumnya</div>
+                    <div className="font-medium text-textMain">{history.previousFinalCost === undefined ? '-' : formatCurrency(history.previousFinalCost)}</div>
+                  </div>
+                  <div className="rounded bg-emerald-50 p-2">
+                    <div className="text-xs text-textMuted">Modal Baru</div>
+                    <div className="font-bold text-emerald-700">{formatCurrency(history.finalCost)}</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-textMuted">
+                  PPN: {history.ppnMode.replace('_', ' ')} ({formatCurrency(history.ppnAmount)})
+                </div>
+                {history.notes && (
+                  <div className="mt-2 text-xs text-textMuted">{history.notes}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <button onClick={handleSave} className="btn-primary w-full py-3 mt-4 text-lg">
           Simpan Produk

@@ -109,6 +109,53 @@ export interface PriceHistory {
   createdAt: number;
 }
 
+export type ProductUnitCostSource = 'PRODUCT_FORM' | 'APPROVAL' | 'CSV_IMPORT' | 'SEED';
+
+export interface ProductUnitCostHistory {
+  id?: string;
+  productId: string;
+  productUnitId: string;
+  supplierId?: number;
+  inputCost: number;
+  ppnMode: 'NO_PPN' | 'PPN_INCLUDED' | 'PPN_EXCLUDED';
+  ppnRate: number;
+  baseCost: number;
+  ppnAmount: number;
+  finalCost: number;
+  previousFinalCost?: number;
+  source: ProductUnitCostSource;
+  effectiveDate: string;
+  referenceNumber?: string;
+  notes?: string;
+  createdBy?: string;
+  importBatchId?: string;
+  createdAt: number;
+}
+
+export interface CsvImportBatch {
+  id?: string;
+  fileName: string;
+  importType: 'PRODUCTS' | 'PRODUCT_COSTS' | 'FULL_PRODUCT_CATALOG';
+  status: 'STAGED' | 'VALIDATED' | 'IMPORTED' | 'FAILED';
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  createdAt: number;
+  importedAt?: number;
+  errorMessage?: string;
+}
+
+export interface CsvImportRow {
+  id?: string;
+  batchId: string;
+  rowNumber: number;
+  rawData: Record<string, string>;
+  mappedData?: Record<string, string | number | boolean | undefined>;
+  status: 'PENDING' | 'VALID' | 'INVALID' | 'IMPORTED';
+  errorMessage?: string;
+  createdAt: number;
+}
+
 export interface AppSetting {
   key: string;
   value: string;
@@ -123,6 +170,9 @@ export class InventoryPricingDatabase extends Dexie {
   marginRules!: Table<MarginRule, string>;
   priceCalculations!: Table<PriceCalculation, string>;
   priceHistories!: Table<PriceHistory, string>;
+  productUnitCostHistories!: Table<ProductUnitCostHistory, string>;
+  csvImportBatches!: Table<CsvImportBatch, string>;
+  csvImportRows!: Table<CsvImportRow, string>;
   appSettings!: Table<AppSetting, string>;
 
   constructor() {
@@ -147,6 +197,20 @@ export class InventoryPricingDatabase extends Dexie {
       marginRules: 'id, ruleType, referenceId, isActive',
       priceCalculations: 'id, productId, productUnitId, status, effectiveDate, createdAt',
       priceHistories: 'id, productId, productUnitId, effectiveDate, createdAt',
+      appSettings: 'key'
+    });
+    this.version(3).stores({
+      categories: '++id, name, isActive',
+      brands: '++id, name, isActive',
+      suppliers: '++id, name, isActive',
+      products: 'id, sku, name, categoryId, brandId, supplierId, barcode, pricingMode, isActive',
+      productUnits: 'id, productId, unitName',
+      marginRules: 'id, ruleType, referenceId, isActive',
+      priceCalculations: 'id, productId, productUnitId, status, effectiveDate, createdAt',
+      priceHistories: 'id, productId, productUnitId, effectiveDate, createdAt',
+      productUnitCostHistories: 'id, productId, productUnitId, supplierId, source, effectiveDate, importBatchId, createdAt',
+      csvImportBatches: 'id, importType, status, createdAt',
+      csvImportRows: 'id, batchId, rowNumber, status, createdAt',
       appSettings: 'key'
     });
   }

@@ -1,5 +1,6 @@
 import { db, type PriceCalculation } from '../db/db';
 import { PriceHistoryService } from './PriceHistoryService';
+import { ProductUnitCostHistoryService } from './ProductUnitCostHistoryService';
 
 export class ApprovalService {
   static resolveApprovedStatus(effectiveDate: string | undefined, now: Date = new Date()): 'ACTIVE' | 'SCHEDULED' {
@@ -30,7 +31,7 @@ export class ApprovalService {
     const approvedAt = now.getTime();
     let resolvedStatus: 'ACTIVE' | 'SCHEDULED' = 'ACTIVE';
 
-    await db.transaction('rw', db.priceCalculations, db.productUnits, db.priceHistories, db.products, async () => {
+    await db.transaction('rw', [db.priceCalculations, db.productUnits, db.priceHistories, db.productUnitCostHistories, db.products], async () => {
       const calculation = await db.priceCalculations.get(calculationId);
       if (!calculation) {
         throw new Error('Kalkulasi harga tidak ditemukan.');
@@ -81,7 +82,7 @@ export class ApprovalService {
         continue;
       }
 
-      await db.transaction('rw', db.priceCalculations, db.productUnits, db.priceHistories, db.products, async () => {
+      await db.transaction('rw', [db.priceCalculations, db.productUnits, db.priceHistories, db.productUnitCostHistories, db.products], async () => {
         const latest = await db.priceCalculations.get(calculation.id!);
         if (!latest || latest.status !== 'SCHEDULED') {
           return;
@@ -124,6 +125,26 @@ export class ApprovalService {
         approvedBy,
         approvedAt,
       ),
+    );
+
+    await db.productUnitCostHistories.add(
+      ProductUnitCostHistoryService.build({
+        productId: calculation.productId,
+        productUnitId: calculation.productUnitId,
+        supplierId: product?.supplierId,
+        inputCost: calculation.inputCost,
+        ppnMode: calculation.ppnMode,
+        ppnRate: calculation.ppnRate,
+        baseCost: calculation.baseCost,
+        ppnAmount: calculation.ppnAmount,
+        finalCost: calculation.finalCost,
+        previousFinalCost: unit.manualCost,
+        source: 'APPROVAL',
+        effectiveDate: calculation.effectiveDate,
+        notes: calculation.changeReason,
+        createdBy: approvedBy,
+        createdAt: approvedAt,
+      }),
     );
 
     await db.productUnits.update(calculation.productUnitId, {
