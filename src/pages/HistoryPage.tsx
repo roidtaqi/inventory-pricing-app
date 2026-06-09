@@ -1,0 +1,132 @@
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
+import { useMemo, useState } from 'react';
+import { formatCurrency, formatNumber } from '../utils/format';
+import { ArrowRight } from 'lucide-react';
+
+export default function HistoryPage() {
+  const [productFilter, setProductFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+
+  const loadedHistory = useLiveQuery(() => 
+    db.priceHistories.orderBy('createdAt').reverse().toArray()
+  );
+
+  const loadedProducts = useLiveQuery(() => db.products.toArray());
+  const history = useMemo(() => loadedHistory ?? [], [loadedHistory]);
+  const products = useMemo(() => loadedProducts ?? [], [loadedProducts]);
+  const units = useLiveQuery(() => db.productUnits.toArray()) || [];
+  const categories = useLiveQuery(() => db.categories.toArray()) || [];
+
+  const filteredHistory = useMemo(() => {
+    return history.filter(item => {
+      const product = products.find(p => p.id === item.productId);
+      if (productFilter && item.productId !== productFilter) return false;
+      if (categoryFilter && product?.categoryId?.toString() !== categoryFilter) return false;
+      if (dateFilter && item.effectiveDate !== dateFilter) return false;
+      return true;
+    });
+  }, [categoryFilter, dateFilter, history, productFilter, products]);
+
+  return (
+    <div className="p-4 max-w-md mx-auto">
+      <h1 className="text-2xl font-bold mb-4 text-primary">Riwayat Harga</h1>
+
+      <div className="card mb-4 space-y-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Produk</label>
+          <select className="input" value={productFilter} onChange={e => setProductFilter(e.target.value)}>
+            <option value="">Semua produk</option>
+            {products.map(product => (
+              <option key={product.id} value={product.id}>{product.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-sm font-medium mb-1">Kategori</label>
+            <select className="input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+              <option value="">Semua</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Tanggal</label>
+            <input className="input" type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
+          </div>
+        </div>
+      </div>
+      
+      <div className="space-y-3">
+        {filteredHistory.map(h => {
+          const product = products.find(p => p.id === h.productId);
+          const unit = units.find(u => u.id === h.productUnitId);
+          const date = new Date(h.createdAt).toLocaleDateString('id-ID', {
+            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          });
+          const effectiveDate = h.effectiveDate
+            ? new Date(`${h.effectiveDate}T00:00:00`).toLocaleDateString('id-ID', {
+                day: 'numeric', month: 'short', year: 'numeric'
+              })
+            : '-';
+
+          return (
+            <div key={h.id} className="card space-y-2 text-sm">
+              <div className="flex justify-between items-start border-b border-border pb-2">
+                <div>
+                  <div className="font-bold text-textMain">{product?.name || 'Unknown Product'}</div>
+                  <div className="text-textMuted">{unit?.unitName || 'Unknown Unit'}</div>
+                </div>
+                <div className="text-[10px] text-textMuted text-right">{date}</div>
+              </div>
+              
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pt-1">
+                <div className="text-center bg-gray-50 p-2 rounded">
+                  <div className="text-xs text-textMuted mb-1">Harga Lama</div>
+                  <div className="font-medium line-through opacity-60">{formatCurrency(h.oldPrice)}</div>
+                </div>
+                <div className="text-gray-400">
+                  <ArrowRight className="w-5 h-5" />
+                </div>
+                <div className="text-center bg-emerald-50 p-2 rounded">
+                  <div className="text-xs text-textMuted mb-1">Harga Baru</div>
+                  <div className="font-bold text-emerald-700">{formatCurrency(h.newPrice)}</div>
+                </div>
+              </div>
+              
+              <div className="flex justify-between text-xs text-textMuted px-1">
+                <span>{`Modal: ${formatCurrency(h.oldCost)} -> ${formatCurrency(h.newCost)}`}</span>
+                <span>Margin: {formatNumber(h.newMargin)}%</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs text-textMuted">
+                <div className="rounded-lg bg-gray-50 p-2">
+                  <div>PPN Lama</div>
+                  <div className="font-medium text-textMain">{(h.oldPpnMode ?? 'UNKNOWN').replace('_', ' ')} ({formatCurrency(h.oldPpnAmount ?? 0)})</div>
+                </div>
+                <div className="rounded-lg bg-gray-50 p-2">
+                  <div>PPN Baru</div>
+                  <div className="font-medium text-textMain">{(h.newPpnMode ?? 'NO_PPN').replace('_', ' ')} ({formatCurrency(h.newPpnAmount ?? 0)})</div>
+                </div>
+              </div>
+
+              <div className="flex justify-between text-xs text-textMuted px-1">
+                <span>Berlaku {effectiveDate}</span>
+                <span>Approved by {h.approvedBy ?? '-'}</span>
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredHistory.length === 0 && (
+          <div className="card text-center text-textMuted py-8">
+            Belum ada riwayat perubahan harga
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
