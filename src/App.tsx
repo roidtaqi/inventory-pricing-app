@@ -36,7 +36,7 @@ function App() {
         aria-label="Settings"
         title="Settings"
         className={clsx(
-          "fixed right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface/95 shadow-sm backdrop-blur transition-colors",
+          "fixed bottom-24 right-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface/95 shadow-sm backdrop-blur transition-colors",
           location.pathname === '/settings' || location.pathname === '/master-data' ? "text-primary" : "text-textMuted hover:text-primary"
         )}
       >
