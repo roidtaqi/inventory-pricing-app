@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Product, type ProductUnit } from '../db/db';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
 import { formatCurrency } from '../utils/format';
+
+type ProductFormTab = 'info' | 'units' | 'costHistory';
 
 export default function ProductFormPage() {
   const { id } = useParams();
@@ -30,6 +32,7 @@ export default function ProductFormPage() {
   const [notes, setNotes] = useState('');
   
   const [units, setUnits] = useState<Partial<ProductUnit>[]>([]);
+  const [activeTab, setActiveTab] = useState<ProductFormTab>('info');
   const costHistories = (loadedCostHistories ?? []).sort((a, b) => b.createdAt - a.createdAt);
 
   useEffect(() => {
@@ -213,133 +216,169 @@ export default function ProductFormPage() {
     return 'Form Produk';
   };
 
+  const productTabs: Array<{ id: ProductFormTab; label: string }> = [
+    { id: 'info', label: 'Info' },
+    { id: 'units', label: `Satuan (${units.length})` },
+    ...(isEdit ? [{ id: 'costHistory' as const, label: `Riwayat (${costHistories.length})` }] : []),
+  ];
+
   return (
-    <div className="bg-background min-h-screen pb-20">
-      <div className="bg-surface border-b border-border p-4 sticky top-0 z-10 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
-          <ArrowLeft className="w-5 h-5 text-textMain" />
-        </button>
-        <h1 className="text-xl font-bold">{isEdit ? 'Edit Produk' : 'Tambah Produk'}</h1>
+    <div className="min-h-screen bg-background pb-24">
+      <div className="sticky top-0 z-10 border-b border-border bg-surface">
+        <div className="flex items-center gap-3 p-4">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
+            <ArrowLeft className="w-5 h-5 text-textMain" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-bold">{isEdit ? 'Edit Produk' : 'Tambah Produk'}</h1>
+            {sku && <div className="text-xs text-textMuted">{sku}</div>}
+          </div>
+          <button onClick={handleSave} className="btn-primary flex items-center gap-1.5 px-3 py-2 text-sm">
+            <Save className="h-4 w-4" />
+            Simpan
+          </button>
+        </div>
+
+        <div className="grid gap-1 px-4 pb-3" style={{ gridTemplateColumns: `repeat(${productTabs.length}, minmax(0, 1fr))` }}>
+          {productTabs.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`h-10 rounded-md text-xs font-semibold transition-colors ${
+                activeTab === tab.id ? 'bg-primary text-white shadow-sm' : 'bg-gray-50 text-textMuted hover:text-primary'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="p-4 max-w-md mx-auto space-y-4">
-        <div className="card space-y-3">
-          <h2 className="font-bold text-primary">Informasi Dasar</h2>
-          <div>
-            <label className="block text-sm font-medium mb-1">SKU *</label>
-            <input className="input" value={sku} onChange={e => setSku(e.target.value)} placeholder="Contoh: IND-001" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Nama Produk *</label>
-            <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Contoh: Indomie Goreng" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Barcode</label>
-            <input className="input" value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Opsional" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Mode Pricing</label>
-            <select className="input" value={pricingMode} onChange={e => setPricingMode(e.target.value as Product['pricingMode'])}>
-              <option value="AUTO_MARGIN">Auto Margin</option>
-              <option value="MANUAL_PRICE">Manual Price</option>
-              <option value="LOCKED_PRICE">Locked Price</option>
-            </select>
-          </div>
-          <label className="flex items-center gap-2 pt-1 text-sm font-medium">
-            <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="h-4 w-4" />
-            Produk aktif
-          </label>
-          <div>
-            <label className="block text-sm font-medium mb-1">Catatan</label>
-            <textarea className="input min-h-20 resize-none" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opsional" />
-          </div>
-        </div>
-
-        <div className="card space-y-3">
-          <h2 className="font-bold text-primary">Klasifikasi</h2>
-          <div>
-            <label className="block text-sm font-medium mb-1">Kategori</label>
-            <select className="input" value={categoryId} onChange={e => setCategoryId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">Pilih Kategori...</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Brand</label>
-            <select className="input" value={brandId} onChange={e => setBrandId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">Pilih Brand...</option>
-              {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Supplier</label>
-            <select className="input" value={supplierId} onChange={e => setSupplierId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">Pilih Supplier...</option>
-              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex justify-between items-center px-1">
-            <h2 className="font-bold text-primary">Satuan Produk</h2>
-            <button onClick={handleAddUnit} className="text-primary text-sm font-medium flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded">
-              <Plus className="w-4 h-4" /> Tambah Satuan
-            </button>
-          </div>
-          
-          {units.length === 0 && (
-            <div className="card text-center text-sm text-textMuted py-6">Belum ada satuan ditambahkan</div>
-          )}
-
-          {units.map((unit, index) => (
-            <div key={index} className="card relative border-l-4 border-l-primary space-y-3">
-              <button 
-                onClick={() => handleRemoveUnit(index)}
-                className="absolute top-3 right-3 text-danger hover:bg-red-50 p-1 rounded"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-              
-              <div className="pr-8">
-                <label className="block text-xs font-medium mb-1">Nama Satuan (mis: pcs, dus)</label>
-                <input className="input py-1.5 text-sm" value={unit.unitName} onChange={e => handleUpdateUnit(index, 'unitName', e.target.value)} />
+        {activeTab === 'info' && (
+          <>
+            <div className="card space-y-3">
+              <h2 className="font-bold text-primary">Informasi Dasar</h2>
+              <div>
+                <label className="block text-sm font-medium mb-1">SKU *</label>
+                <input className="input" value={sku} onChange={e => setSku(e.target.value)} placeholder="Contoh: IND-001" />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium mb-1">Konversi ke Dasar</label>
-                  <input type="number" className="input py-1.5 text-sm" value={unit.conversionToBase} onChange={e => handleUpdateUnit(index, 'conversionToBase', Number(e.target.value))} />
+              <div>
+                <label className="block text-sm font-medium mb-1">Nama Produk *</label>
+                <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Contoh: Indomie Goreng" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Barcode</label>
+                <input className="input" value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Opsional" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Mode Pricing</label>
+                <select className="input" value={pricingMode} onChange={e => setPricingMode(e.target.value as Product['pricingMode'])}>
+                  <option value="AUTO_MARGIN">Auto Margin</option>
+                  <option value="MANUAL_PRICE">Manual Price</option>
+                  <option value="LOCKED_PRICE">Locked Price</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 pt-1 text-sm font-medium">
+                <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="h-4 w-4" />
+                Produk aktif
+              </label>
+              <div>
+                <label className="block text-sm font-medium mb-1">Catatan</label>
+                <textarea className="input min-h-20 resize-none" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opsional" />
+              </div>
+            </div>
+
+            <div className="card space-y-3">
+              <h2 className="font-bold text-primary">Klasifikasi</h2>
+              <div>
+                <label className="block text-sm font-medium mb-1">Kategori</label>
+                <select className="input" value={categoryId} onChange={e => setCategoryId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">Pilih Kategori...</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Brand</label>
+                <select className="input" value={brandId} onChange={e => setBrandId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">Pilih Brand...</option>
+                  {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Supplier</label>
+                <select className="input" value={supplierId} onChange={e => setSupplierId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">Pilih Supplier...</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'units' && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center px-1">
+              <h2 className="font-bold text-primary">Satuan Produk</h2>
+              <button onClick={handleAddUnit} className="text-primary text-sm font-medium flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded">
+                <Plus className="w-4 h-4" /> Tambah Satuan
+              </button>
+            </div>
+
+            {units.length === 0 && (
+              <div className="card text-center text-sm text-textMuted py-6">Belum ada satuan ditambahkan</div>
+            )}
+
+            {units.map((unit, index) => (
+              <div key={unit.id ?? index} className="card relative border-l-4 border-l-primary space-y-3">
+                <button
+                  onClick={() => handleRemoveUnit(index)}
+                  className="absolute top-3 right-3 text-danger hover:bg-red-50 p-1 rounded"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                <div className="pr-8">
+                  <label className="block text-xs font-medium mb-1">Nama Satuan (mis: pcs, dus)</label>
+                  <input className="input py-1.5 text-sm" value={unit.unitName} onChange={e => handleUpdateUnit(index, 'unitName', e.target.value)} />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Harga Modal Manual</label>
-                  <input type="number" className="input py-1.5 text-sm" value={unit.manualCost} onChange={e => handleUpdateUnit(index, 'manualCost', Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Harga Jual Aktif</label>
-                  <input type="number" className="input py-1.5 text-sm" value={unit.activeSellingPrice} onChange={e => handleUpdateUnit(index, 'activeSellingPrice', Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Harga Min & Max</label>
-                  <div className="flex gap-1">
-                    <input type="number" className="input py-1.5 text-sm w-full" placeholder="Min" value={unit.minSellingPrice || ''} onChange={e => handleUpdateUnit(index, 'minSellingPrice', e.target.value ? Number(e.target.value) : undefined)} />
-                    <input type="number" className="input py-1.5 text-sm w-full" placeholder="Max" value={unit.maxSellingPrice || ''} onChange={e => handleUpdateUnit(index, 'maxSellingPrice', e.target.value ? Number(e.target.value) : undefined)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Konversi ke Dasar</label>
+                    <input type="number" className="input py-1.5 text-sm" value={unit.conversionToBase} onChange={e => handleUpdateUnit(index, 'conversionToBase', Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Harga Modal Manual</label>
+                    <input type="number" className="input py-1.5 text-sm" value={unit.manualCost} onChange={e => handleUpdateUnit(index, 'manualCost', Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Harga Jual Aktif</label>
+                    <input type="number" className="input py-1.5 text-sm" value={unit.activeSellingPrice} onChange={e => handleUpdateUnit(index, 'activeSellingPrice', Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Harga Min & Max</label>
+                    <div className="flex gap-1">
+                      <input type="number" className="input py-1.5 text-sm w-full" placeholder="Min" value={unit.minSellingPrice || ''} onChange={e => handleUpdateUnit(index, 'minSellingPrice', e.target.value ? Number(e.target.value) : undefined)} />
+                      <input type="number" className="input py-1.5 text-sm w-full" placeholder="Max" value={unit.maxSellingPrice || ''} onChange={e => handleUpdateUnit(index, 'maxSellingPrice', e.target.value ? Number(e.target.value) : undefined)} />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {isEdit && (
-          <div className="card space-y-3">
-            <h2 className="font-bold text-primary">Riwayat Modal</h2>
+        {activeTab === 'costHistory' && isEdit && (
+          <div className="space-y-3">
+            <h2 className="px-1 font-bold text-primary">Riwayat Modal</h2>
             {costHistories.length === 0 && (
-              <div className="rounded-lg bg-gray-50 p-4 text-center text-sm text-textMuted">
+              <div className="card text-center text-sm text-textMuted py-8">
                 Belum ada riwayat modal
               </div>
             )}
             {costHistories.map(history => (
-              <div key={history.id} className="rounded-lg border border-border p-3 text-sm">
+              <div key={history.id} className="card text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-bold text-textMain">{getUnitName(history.productUnitId)}</div>
@@ -371,10 +410,6 @@ export default function ProductFormPage() {
             ))}
           </div>
         )}
-
-        <button onClick={handleSave} className="btn-primary w-full py-3 mt-4 text-lg">
-          Simpan Produk
-        </button>
       </div>
     </div>
   );
