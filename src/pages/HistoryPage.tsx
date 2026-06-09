@@ -2,7 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useMemo, useState } from 'react';
 import { formatCurrency, formatNumber } from '../utils/format';
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function HistoryPage() {
   const [productFilter, setProductFilter] = useState('');
@@ -30,48 +31,54 @@ export default function HistoryPage() {
   }, [categoryFilter, dateFilter, history, productFilter, products]);
 
   return (
-    <div className="p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4 text-primary">Riwayat Harga</h1>
+    <div className="min-h-screen bg-background pb-24">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface p-4">
+        <Link to="/more" aria-label="Kembali" className="rounded-full p-2 -ml-2 text-textMain hover:bg-gray-100">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <h1 className="text-xl font-bold text-textMain">Riwayat Harga</h1>
+      </div>
 
-      <div className="card mb-4 space-y-3">
-        <div>
-          <label className="block text-sm font-medium mb-1">Produk</label>
-          <select className="input" value={productFilter} onChange={e => setProductFilter(e.target.value)}>
-            <option value="">Semua produk</option>
-            {products.map(product => (
-              <option key={product.id} value={product.id}>{product.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="mx-auto max-w-md p-4">
+        <div className="card mb-4 space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Kategori</label>
-            <select className="input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-              <option value="">Semua</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>{category.name}</option>
+            <label className="block text-sm font-medium mb-1">Produk</label>
+            <select className="input" value={productFilter} onChange={e => setProductFilter(e.target.value)}>
+              <option value="">Semua produk</option>
+              {products.map(product => (
+                <option key={product.id} value={product.id}>{product.name}</option>
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Tanggal</label>
-            <input className="input" type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-sm font-medium mb-1">Kategori</label>
+              <select className="input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+                <option value="">Semua</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Tanggal</label>
+              <input className="input" type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
+            </div>
           </div>
         </div>
-      </div>
-      
-      <div className="space-y-3">
-        {filteredHistory.map(h => {
-          const product = products.find(p => p.id === h.productId);
-          const unit = units.find(u => u.id === h.productUnitId);
-          const date = new Date(h.createdAt).toLocaleDateString('id-ID', {
-            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-          });
-          const effectiveDate = h.effectiveDate
-            ? new Date(`${h.effectiveDate}T00:00:00`).toLocaleDateString('id-ID', {
-                day: 'numeric', month: 'short', year: 'numeric'
-              })
-            : '-';
+
+        <div className="space-y-3">
+          {filteredHistory.map(h => {
+            const product = products.find(p => p.id === h.productId);
+            const unit = units.find(u => u.id === h.productUnitId);
+            const date = new Date(h.createdAt).toLocaleDateString('id-ID', {
+              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+            const effectiveDate = h.effectiveDate
+              ? new Date(`${h.effectiveDate}T00:00:00`).toLocaleDateString('id-ID', {
+                  day: 'numeric', month: 'short', year: 'numeric'
+                })
+              : '-';
 
           return (
             <div key={h.id} className="card space-y-2 text-sm">
@@ -119,13 +126,14 @@ export default function HistoryPage() {
               </div>
             </div>
           );
-        })}
+          })}
 
-        {filteredHistory.length === 0 && (
-          <div className="card text-center text-textMuted py-8">
-            Belum ada riwayat perubahan harga
-          </div>
-        )}
+          {filteredHistory.length === 0 && (
+            <div className="card text-center text-textMuted py-8">
+              Belum ada riwayat perubahan harga
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

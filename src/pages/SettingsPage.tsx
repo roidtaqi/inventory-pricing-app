@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Database, Download, Save } from 'lucide-react';
+import { ArrowLeft, Database, Download, Save } from 'lucide-react';
 import { db } from '../db/db';
 
 export default function SettingsPage() {
@@ -87,10 +87,15 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4 text-primary">Settings</h1>
+    <div className="min-h-screen bg-background pb-24">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface p-4">
+        <Link to="/more" aria-label="Kembali" className="rounded-full p-2 -ml-2 text-textMain hover:bg-gray-100">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <h1 className="text-xl font-bold text-textMain">Settings</h1>
+      </div>
 
-      <div className="space-y-4">
+      <div className="mx-auto max-w-md space-y-4 p-4">
         <div className="card space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">Nama Aplikasi</label>
