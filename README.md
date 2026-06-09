@@ -122,6 +122,7 @@ Rounding default adalah ribuan terdekat:
 
 - Kalkulator harga mobile-first
 - Product CRUD dengan multi-satuan
+- Master data kategori, brand, dan supplier
 - Margin rule default, kategori, brand, supplier, produk
 - Draft price calculation
 - Approval dan scheduled price activation
@@ -173,6 +174,7 @@ src/pages
   ApprovalPage.tsx
   HistoryPage.tsx
   SettingsPage.tsx
+  MasterDataPage.tsx
 ```
 
 ## Sample Data

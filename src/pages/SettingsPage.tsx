@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Download, Save } from 'lucide-react';
+import { Database, Download, Save } from 'lucide-react';
 import { db } from '../db/db';
 
 export default function SettingsPage() {
@@ -121,6 +122,11 @@ export default function SettingsPage() {
           <Save className="h-4 w-4" />
           Simpan Settings
         </button>
+
+        <Link to="/master-data" className="btn-secondary flex w-full items-center justify-center gap-2 py-3">
+          <Database className="h-4 w-4" />
+          Master Data
+        </Link>
 
         <div className="card space-y-3">
           <div>

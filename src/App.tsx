@@ -12,6 +12,7 @@ import MarginRuleFormPage from './pages/MarginRuleFormPage';
 import ApprovalPage from './pages/ApprovalPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import MasterDataPage from './pages/MasterDataPage';
 
 function App() {
   const location = useLocation();
@@ -36,7 +37,7 @@ function App() {
         title="Settings"
         className={clsx(
           "fixed right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface/95 shadow-sm backdrop-blur transition-colors",
-          location.pathname === '/settings' ? "text-primary" : "text-textMuted hover:text-primary"
+          location.pathname === '/settings' || location.pathname === '/master-data' ? "text-primary" : "text-textMuted hover:text-primary"
         )}
       >
         <Settings className="h-5 w-5" />
@@ -54,6 +55,7 @@ function App() {
           <Route path="/approval" element={<ApprovalPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/master-data" element={<MasterDataPage />} />
         </Routes>
       </main>
 
