@@ -14,7 +14,7 @@ export default function SettingsPage() {
   const [defaultMarginInput, setDefaultMarginInput] = useState<string | null>(null);
   const [currencyFormatInput, setCurrencyFormatInput] = useState<string | null>(null);
 
-  const appName = appNameInput ?? settings.get('appName') ?? 'Inventory & Pricing Calculator';
+  const appName = appNameInput ?? settings.get('appName') ?? 'Kalkulator Tekad Mandiri';
   const defaultPpnRate = defaultPpnRateInput ?? settings.get('defaultPpnRate') ?? '11';
   const defaultMargin = defaultMarginInput ?? defaultRule?.marginPercent.toString() ?? '15';
   const currencyFormat = currencyFormatInput ?? settings.get('currencyFormat') ?? 'IDR';

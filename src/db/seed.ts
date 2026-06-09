@@ -1,14 +1,21 @@
 import { db, type Product } from './db';
 
+const APP_NAME = 'Kalkulator Tekad Mandiri';
+const LEGACY_APP_NAME = 'Inventory & Pricing Calculator';
+
 const ensureSetting = async (key: string, value: string) => {
   const existing = await db.appSettings.get(key);
   if (!existing) {
+    await db.appSettings.put({ key, value });
+    return;
+  }
+  if (key === 'appName' && existing.value === LEGACY_APP_NAME) {
     await db.appSettings.put({ key, value });
   }
 };
 
 const ensureCoreSettings = async () => {
-  await ensureSetting('appName', 'Inventory & Pricing Calculator');
+  await ensureSetting('appName', APP_NAME);
   await ensureSetting('defaultPpnRate', '11');
   await ensureSetting('currencyFormat', 'IDR');
   await ensureSetting('roundingMode', 'NEAREST_THOUSAND_500_THRESHOLD');
@@ -267,7 +274,7 @@ export const seedDatabase = async () => {
     ]);
 
     await db.appSettings.bulkAdd([
-      { key: 'appName', value: 'Inventory & Pricing Calculator' },
+      { key: 'appName', value: APP_NAME },
       { key: 'defaultPpnRate', value: '11' },
       { key: 'currencyFormat', value: 'IDR' },
       { key: 'roundingMode', value: 'NEAREST_THOUSAND_500_THRESHOLD' },

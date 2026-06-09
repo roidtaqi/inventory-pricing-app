@@ -1,6 +1,6 @@
 {
-  "name": "Inventory & Pricing Calculator",
-  "short_name": "Pricing",
+  "name": "Kalkulator Tekad Mandiri",
+  "short_name": "Tekad",
   "description": "Kalkulator inventaris dan approval perubahan harga untuk toko retail kecil.",
   "start_url": "/",
   "scope": "/",

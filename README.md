@@ -1,4 +1,4 @@
-# Inventory & Pricing Calculator
+# Kalkulator Tekad Mandiri
 
 Mobile-first PWA untuk membantu owner/admin toko retail, sembako, grosir, dan minimarket kecil menghitung harga jual, mengelola inventaris produk, membuat draft perubahan harga, melakukan approval, dan menyimpan riwayat perubahan harga.
 

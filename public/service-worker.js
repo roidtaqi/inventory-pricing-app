@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inventory-pricing-v1';
+const CACHE_NAME = 'kalkulator-tekad-mandiri-v1';
 const APP_SHELL = [
   '/',
   '/index.html',
