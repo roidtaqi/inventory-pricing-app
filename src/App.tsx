@@ -26,11 +26,22 @@ function App() {
     { path: '/margin', label: 'Margin', icon: Percent },
     { path: '/approval', label: 'Approval', icon: CheckSquare },
     { path: '/history', label: 'Riwayat', icon: History },
-    { path: '/settings', label: 'Settings', icon: Settings },
   ];
 
   return (
     <div className="flex flex-col h-screen bg-background text-textMain">
+      <Link
+        to="/settings"
+        aria-label="Settings"
+        title="Settings"
+        className={clsx(
+          "fixed right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface/95 shadow-sm backdrop-blur transition-colors",
+          location.pathname === '/settings' ? "text-primary" : "text-textMuted hover:text-primary"
+        )}
+      >
+        <Settings className="h-5 w-5" />
+      </Link>
+
       <main className="flex-1 overflow-y-auto pb-20">
         <Routes>
           <Route path="/" element={<CalculatorPage />} />
@@ -46,21 +57,30 @@ function App() {
         </Routes>
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-surface border-t border-border flex justify-around p-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
+      <nav className="fixed bottom-0 z-50 flex w-full items-center justify-around border-t border-border bg-surface px-2 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          const isActive = item.path === '/'
+            ? location.pathname === '/'
+            : location.pathname.startsWith(item.path);
           return (
             <Link
               key={item.path}
               to={item.path}
+              aria-label={item.label}
+              title={item.label}
               className={clsx(
-                "flex min-w-0 flex-1 flex-col items-center justify-center h-12 transition-colors",
+                "relative flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md transition-colors",
                 isActive ? "text-primary" : "text-textMuted hover:text-primary/70"
               )}
             >
-              <Icon className="w-5 h-5 mb-1" />
-              <span className="max-w-full truncate text-[9px] font-medium">{item.label}</span>
+              <Icon className="h-5 w-5" />
+              {isActive && (
+                <span className="max-w-[72px] truncate text-[10px] font-semibold">{item.label}</span>
+              )}
+              {isActive && (
+                <span className="absolute bottom-0 h-0.5 w-5 rounded-full bg-primary" />
+              )}
             </Link>
           );
         })}
