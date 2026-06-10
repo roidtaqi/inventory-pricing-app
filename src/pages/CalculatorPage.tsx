@@ -453,7 +453,7 @@ export default function CalculatorPage() {
                 className="input"
                 value={invoiceCartonCost}
                 onChange={event => setInvoiceCartonCost(event.target.value)}
-                placeholder="244,865"
+                placeholder="Contoh: 120000"
               />
             </div>
 
@@ -486,7 +486,7 @@ export default function CalculatorPage() {
                 className="input"
                 value={invoiceSellingPrice}
                 onChange={event => setInvoiceSellingPrice(event.target.value)}
-                placeholder="26,5"
+                placeholder="Contoh: 15000"
               />
             </div>
 
