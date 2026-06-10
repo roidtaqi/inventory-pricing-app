@@ -6,6 +6,7 @@ import { PricingCalculatorService, type PricingResult } from '../services/Pricin
 import { MarginRuleResolver } from '../services/MarginRuleResolver';
 import { ApprovalService } from '../services/ApprovalService';
 import { UnitCostAllocationService } from '../services/UnitCostAllocationService';
+import { InvoiceLineCalculatorService, type InvoiceLineResult } from '../services/InvoiceLineCalculatorService';
 import { formatCurrency, formatNumber } from '../utils/format';
 
 const toDateInput = (date: Date): string => {
@@ -16,9 +17,28 @@ const toDateInput = (date: Date): string => {
 };
 
 type CostInputMode = 'PER_UNIT' | 'TOTAL_RECEIVED';
+type CalculatorMode = 'INVOICE' | 'PRODUCT';
 const CUSTOM_RECEIVED_UNIT_ID = '__CUSTOM_RECEIVED_UNIT__';
 
+const parseNumberInput = (value: string): number => {
+  const trimmed = value.trim().replace(/\s/g, '');
+  if (!trimmed) return 0;
+  if (/^\d{1,3}([.,]\d{3})+$/.test(trimmed)) {
+    return Number(trimmed.replace(/[.,]/g, ''));
+  }
+  return Number(trimmed.replace(',', '.'));
+};
+
+const parseMoneyInput = (value: string): number => {
+  const parsed = parseNumberInput(value);
+  if (!Number.isFinite(parsed)) return parsed;
+
+  const shorthandThousands = /[.,]\d{1,2}$/.test(value.trim()) && parsed > 0 && parsed < 1000;
+  return shorthandThousands ? parsed * 1000 : parsed;
+};
+
 export default function CalculatorPage() {
+  const [calculatorMode, setCalculatorMode] = useState<CalculatorMode>('INVOICE');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [costInputMode, setCostInputMode] = useState<CostInputMode>('PER_UNIT');
@@ -26,6 +46,14 @@ export default function CalculatorPage() {
   const [receivedQuantity, setReceivedQuantity] = useState('1');
   const [customReceivedUnitSize, setCustomReceivedUnitSize] = useState('');
   const [manualCost, setManualCost] = useState('');
+  const [invoiceCartonQuantity, setInvoiceCartonQuantity] = useState('0');
+  const [invoiceLooseQuantity, setInvoiceLooseQuantity] = useState('');
+  const [invoicePiecesPerCarton, setInvoicePiecesPerCarton] = useState('12');
+  const [invoiceCartonCost, setInvoiceCartonCost] = useState('');
+  const [invoiceDiscountPercent, setInvoiceDiscountPercent] = useState('0');
+  const [invoicePpnMode, setInvoicePpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
+  const [invoicePpnRateInput, setInvoicePpnRateInput] = useState('');
+  const [invoiceSellingPrice, setInvoiceSellingPrice] = useState('');
   const [ppnMode, setPpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [ppnRateInput, setPpnRateInput] = useState('');
   const [marginOverride, setMarginOverride] = useState('');
@@ -58,6 +86,43 @@ export default function CalculatorPage() {
     return Number.isFinite(value) && value >= 0 ? value : 11;
   }, [settings]);
   const ppnRate = Number(ppnRateInput || defaultPpnRate);
+  const invoicePpnRate = parseNumberInput(invoicePpnRateInput || defaultPpnRate.toString());
+
+  const invoiceCalculation = useMemo((): { result: InvoiceLineResult | null; error: string | null } => {
+    if (!invoiceCartonCost) {
+      return { result: null, error: null };
+    }
+
+    try {
+      return {
+        result: InvoiceLineCalculatorService.calculate({
+          cartonQuantity: parseNumberInput(invoiceCartonQuantity),
+          looseQuantity: parseNumberInput(invoiceLooseQuantity),
+          piecesPerCarton: parseNumberInput(invoicePiecesPerCarton),
+          cartonCost: parseMoneyInput(invoiceCartonCost),
+          discountPercent: parseNumberInput(invoiceDiscountPercent),
+          ppnMode: invoicePpnMode,
+          ppnRate: invoicePpnRate,
+          sellingPrice: invoiceSellingPrice ? parseMoneyInput(invoiceSellingPrice) : undefined,
+        }),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        result: null,
+        error: error instanceof Error ? error.message : 'Input faktur tidak valid.',
+      };
+    }
+  }, [
+    invoiceCartonCost,
+    invoiceCartonQuantity,
+    invoiceDiscountPercent,
+    invoiceLooseQuantity,
+    invoicePiecesPerCarton,
+    invoicePpnMode,
+    invoicePpnRate,
+    invoiceSellingPrice,
+  ]);
 
   const activeMarginRules = useMemo(() => {
     return (loadedMarginRules ?? []).map(rule => ({
@@ -175,6 +240,7 @@ export default function CalculatorPage() {
   ]);
 
   const { taxResult, totalTaxResult, targetUnitQuantity, pricingResult, error: calculationError } = calculation;
+  const { result: invoiceResult, error: invoiceError } = invoiceCalculation;
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
@@ -224,6 +290,17 @@ export default function CalculatorPage() {
     setMarginOverride('');
     setChangeReason('');
     setLockedConfirmed(false);
+  };
+
+  const resetInvoiceCalculator = () => {
+    setInvoiceCartonQuantity('0');
+    setInvoiceLooseQuantity('');
+    setInvoicePiecesPerCarton('12');
+    setInvoiceCartonCost('');
+    setInvoiceDiscountPercent('0');
+    setInvoicePpnMode(PpnMode.NO_PPN);
+    setInvoicePpnRateInput('');
+    setInvoiceSellingPrice('');
   };
 
   const handleSaveCalculation = async (status: PriceCalculation['status']) => {
@@ -290,6 +367,205 @@ export default function CalculatorPage() {
     <div className="p-4 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-4 text-primary">Kalkulator Harga</h1>
 
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setCalculatorMode('INVOICE')}
+          className={`h-10 rounded-md border text-sm font-semibold transition-colors ${
+            calculatorMode === 'INVOICE' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-textMuted'
+          }`}
+        >
+          Faktur
+        </button>
+        <button
+          type="button"
+          onClick={() => setCalculatorMode('PRODUCT')}
+          className={`h-10 rounded-md border text-sm font-semibold transition-colors ${
+            calculatorMode === 'PRODUCT' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-textMuted'
+          }`}
+        >
+          Produk
+        </button>
+      </div>
+
+      {calculatorMode === 'INVOICE' ? (
+        <div className="space-y-4">
+          <div className="card space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-sm font-medium mb-1">Crt</label>
+                <input
+                  type="number"
+                  className="input"
+                  min="0"
+                  step="any"
+                  value={invoiceCartonQuantity}
+                  onChange={event => setInvoiceCartonQuantity(event.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Pcs</label>
+                <input
+                  type="number"
+                  className="input"
+                  min="0"
+                  step="any"
+                  value={invoiceLooseQuantity}
+                  onChange={event => setInvoiceLooseQuantity(event.target.value)}
+                  placeholder="3"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-sm font-medium mb-1">Isi/Karton</label>
+                <input
+                  type="number"
+                  className="input"
+                  min="1"
+                  step="any"
+                  value={invoicePiecesPerCarton}
+                  onChange={event => setInvoicePiecesPerCarton(event.target.value)}
+                  placeholder="12"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Diskon (%)</label>
+                <input
+                  type="number"
+                  className="input"
+                  min="0"
+                  step="any"
+                  value={invoiceDiscountPercent}
+                  onChange={event => setInvoiceDiscountPercent(event.target.value)}
+                  placeholder="2"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Harga Karton</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input"
+                value={invoiceCartonCost}
+                onChange={event => setInvoiceCartonCost(event.target.value)}
+                placeholder="244,865"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Mode PPN</label>
+              <select className="input" value={invoicePpnMode} onChange={event => setInvoicePpnMode(event.target.value as PpnMode)}>
+                <option value={PpnMode.NO_PPN}>Non PPN</option>
+                <option value={PpnMode.PPN_INCLUDED}>Termasuk PPN (Included)</option>
+                <option value={PpnMode.PPN_EXCLUDED}>Belum PPN (Excluded)</option>
+              </select>
+            </div>
+
+            {invoicePpnMode !== PpnMode.NO_PPN && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Rate PPN (%)</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={invoicePpnRateInput || defaultPpnRate.toString()}
+                  onChange={event => setInvoicePpnRateInput(event.target.value)}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Harga Jual per Pcs</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input"
+                value={invoiceSellingPrice}
+                onChange={event => setInvoiceSellingPrice(event.target.value)}
+                placeholder="26,5"
+              />
+            </div>
+
+            <button type="button" onClick={resetInvoiceCalculator} className="btn-secondary w-full py-2">
+              Reset
+            </button>
+          </div>
+
+          {invoiceError && (
+            <div className="rounded-lg border border-danger/30 bg-red-50 p-3 text-sm font-medium text-danger">
+              {invoiceError}
+            </div>
+          )}
+
+          {invoiceResult && (
+            <div className="card bg-indigo-50 border-indigo-100">
+              <h2 className="text-lg font-bold text-indigo-900 mb-2">Hasil Faktur</h2>
+              <div className="space-y-2 text-sm text-indigo-800">
+                <div className="flex justify-between">
+                  <span>Total Pcs:</span>
+                  <span className="font-medium">{formatNumber(invoiceResult.totalPieces)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Setara Karton:</span>
+                  <span className="font-medium">{formatNumber(invoiceResult.cartonEquivalentQuantity)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total sebelum diskon:</span>
+                  <span>{formatCurrency(invoiceResult.grossTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Potongan diskon:</span>
+                  <span>-{formatCurrency(invoiceResult.discountAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total setelah diskon:</span>
+                  <span>{formatCurrency(invoiceResult.discountedTotal)}</span>
+                </div>
+                {invoiceResult.taxResult.ppnMode !== PpnMode.NO_PPN && (
+                  <>
+                    <div className="flex justify-between">
+                      <span>PPN ({invoiceResult.taxResult.ppnRate}%):</span>
+                      <span>+{formatCurrency(invoiceResult.taxResult.ppnAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total setelah PPN:</span>
+                      <span>{formatCurrency(invoiceResult.taxResult.finalCost)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between py-2 border-y border-indigo-200 my-2">
+                  <span className="font-bold">Modal per Pcs:</span>
+                  <span className="font-bold text-lg text-primary">{formatCurrency(invoiceResult.unitCost)}</span>
+                </div>
+                {invoiceResult.sellingPrice !== undefined && (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Harga Jual:</span>
+                      <span className="font-medium">{formatCurrency(invoiceResult.sellingPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Profit per Pcs:</span>
+                      <span className="font-medium text-emerald-600">{formatCurrency(invoiceResult.profitPerUnit ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Margin Aktual:</span>
+                      <span className="font-medium">{formatNumber(invoiceResult.actualMargin ?? 0)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Jual:</span>
+                      <span className="font-medium">{formatCurrency(invoiceResult.totalSellingPrice ?? 0)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="space-y-4">
         <div className="card space-y-3">
           <div>
@@ -574,6 +850,7 @@ export default function CalculatorPage() {
           <button onClick={() => handleSaveCalculation('WAITING_APPROVAL')} disabled={!pricingResult} className="btn-primary flex-1">Ajukan Approval</button>
         </div>
       </div>
+      )}
     </div>
   );
 }
