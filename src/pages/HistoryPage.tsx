@@ -23,9 +23,9 @@ export default function HistoryPage() {
   const categories = useMemo(() => loadedCategories ?? [], [loadedCategories]);
 
   const productOptions = useMemo(() => {
-    if (!categoryFilter) return products;
+    if (productFilter || !categoryFilter) return products;
     return products.filter(product => product.categoryId?.toString() === categoryFilter);
-  }, [categoryFilter, products]);
+  }, [categoryFilter, productFilter, products]);
 
   const handleProductFilterChange = (productId: string) => {
     setProductFilter(productId);
