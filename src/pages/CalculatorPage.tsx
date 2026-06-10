@@ -54,6 +54,7 @@ export default function CalculatorPage() {
   const [invoicePpnMode, setInvoicePpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [invoicePpnRateInput, setInvoicePpnRateInput] = useState('');
   const [invoiceSellingPrice, setInvoiceSellingPrice] = useState('');
+  const [invoiceMarginPercent, setInvoiceMarginPercent] = useState('');
   const [ppnMode, setPpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [ppnRateInput, setPpnRateInput] = useState('');
   const [marginOverride, setMarginOverride] = useState('');
@@ -241,6 +242,24 @@ export default function CalculatorPage() {
 
   const { taxResult, totalTaxResult, targetUnitQuantity, pricingResult, error: calculationError } = calculation;
   const { result: invoiceResult, error: invoiceError } = invoiceCalculation;
+  const invoiceMarginCalculation = useMemo((): { result: PricingResult | null; error: string | null } => {
+    if (!invoiceResult || !invoiceMarginPercent) {
+      return { result: null, error: null };
+    }
+
+    try {
+      return {
+        result: PricingCalculatorService.calculatePrice(invoiceResult.unitCost, parseNumberInput(invoiceMarginPercent)),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        result: null,
+        error: error instanceof Error ? error.message : 'Margin faktur tidak valid.',
+      };
+    }
+  }, [invoiceMarginPercent, invoiceResult]);
+  const { result: invoiceMarginResult, error: invoiceMarginError } = invoiceMarginCalculation;
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
@@ -301,6 +320,7 @@ export default function CalculatorPage() {
     setInvoicePpnMode(PpnMode.NO_PPN);
     setInvoicePpnRateInput('');
     setInvoiceSellingPrice('');
+    setInvoiceMarginPercent('');
   };
 
   const handleSaveCalculation = async (status: PriceCalculation['status']) => {
@@ -490,6 +510,19 @@ export default function CalculatorPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium mb-1">Margin Manual (%)</label>
+              <input
+                type="number"
+                className="input"
+                min="0"
+                step="any"
+                value={invoiceMarginPercent}
+                onChange={event => setInvoiceMarginPercent(event.target.value)}
+                placeholder="Contoh: 20"
+              />
+            </div>
+
             <button type="button" onClick={resetInvoiceCalculator} className="btn-secondary w-full py-2">
               Reset
             </button>
@@ -498,6 +531,12 @@ export default function CalculatorPage() {
           {invoiceError && (
             <div className="rounded-lg border border-danger/30 bg-red-50 p-3 text-sm font-medium text-danger">
               {invoiceError}
+            </div>
+          )}
+
+          {invoiceMarginError && (
+            <div className="rounded-lg border border-danger/30 bg-red-50 p-3 text-sm font-medium text-danger">
+              {invoiceMarginError}
             </div>
           )}
 
@@ -541,10 +580,30 @@ export default function CalculatorPage() {
                   <span className="font-bold">Modal per Pcs:</span>
                   <span className="font-bold text-lg text-primary">{formatCurrency(invoiceResult.unitCost)}</span>
                 </div>
+                {invoiceMarginResult && (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Harga dari Margin:</span>
+                      <span className="font-medium">{formatCurrency(invoiceMarginResult.recommendedPrice)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-y border-indigo-200 my-2">
+                      <span className="font-bold">Harga Jual dari Margin:</span>
+                      <span className="font-bold text-lg text-primary">{formatCurrency(invoiceMarginResult.roundedPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Profit dari Margin:</span>
+                      <span className="font-medium text-emerald-600">{formatCurrency(invoiceMarginResult.estimatedProfit)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Margin Aktual dari Margin:</span>
+                      <span className="font-medium">{formatNumber(invoiceMarginResult.actualMargin)}%</span>
+                    </div>
+                  </>
+                )}
                 {invoiceResult.sellingPrice !== undefined && (
                   <>
                     <div className="flex justify-between">
-                      <span>Harga Jual:</span>
+                      <span>Harga Jual Input:</span>
                       <span className="font-medium">{formatCurrency(invoiceResult.sellingPrice)}</span>
                     </div>
                     <div className="flex justify-between">
