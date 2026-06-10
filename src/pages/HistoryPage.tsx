@@ -15,10 +15,39 @@ export default function HistoryPage() {
   );
 
   const loadedProducts = useLiveQuery(() => db.products.toArray());
+  const loadedUnits = useLiveQuery(() => db.productUnits.toArray());
+  const loadedCategories = useLiveQuery(() => db.categories.toArray());
   const history = useMemo(() => loadedHistory ?? [], [loadedHistory]);
   const products = useMemo(() => loadedProducts ?? [], [loadedProducts]);
-  const units = useLiveQuery(() => db.productUnits.toArray()) || [];
-  const categories = useLiveQuery(() => db.categories.toArray()) || [];
+  const units = useMemo(() => loadedUnits ?? [], [loadedUnits]);
+  const categories = useMemo(() => loadedCategories ?? [], [loadedCategories]);
+
+  const productOptions = useMemo(() => {
+    if (!categoryFilter) return products;
+    return products.filter(product => product.categoryId?.toString() === categoryFilter);
+  }, [categoryFilter, products]);
+
+  const handleProductFilterChange = (productId: string) => {
+    setProductFilter(productId);
+
+    const selectedProduct = products.find(product => product.id === productId);
+    if (selectedProduct?.categoryId != null) {
+      setCategoryFilter(selectedProduct.categoryId.toString());
+    } else if (productId) {
+      setCategoryFilter('');
+    }
+  };
+
+  const handleCategoryFilterChange = (categoryId: string) => {
+    setCategoryFilter(categoryId);
+
+    if (!categoryId) return;
+
+    const selectedProduct = products.find(product => product.id === productFilter);
+    if (selectedProduct && selectedProduct.categoryId?.toString() !== categoryId) {
+      setProductFilter('');
+    }
+  };
 
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
@@ -43,9 +72,9 @@ export default function HistoryPage() {
         <div className="card mb-4 space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">Produk</label>
-            <select className="input" value={productFilter} onChange={e => setProductFilter(e.target.value)}>
+            <select className="input" value={productFilter} onChange={e => handleProductFilterChange(e.target.value)}>
               <option value="">Semua produk</option>
-              {products.map(product => (
+              {productOptions.map(product => (
                 <option key={product.id} value={product.id}>{product.name}</option>
               ))}
             </select>
@@ -53,7 +82,12 @@ export default function HistoryPage() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm font-medium mb-1">Kategori</label>
-              <select className="input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+              <select
+                className="input disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-textMuted"
+                value={categoryFilter}
+                onChange={e => handleCategoryFilterChange(e.target.value)}
+                disabled={Boolean(productFilter)}
+              >
                 <option value="">Semua</option>
                 {categories.map(category => (
                   <option key={category.id} value={category.id}>{category.name}</option>
