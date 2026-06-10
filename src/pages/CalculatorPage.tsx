@@ -53,7 +53,6 @@ export default function CalculatorPage() {
   const [invoiceDiscountPercent, setInvoiceDiscountPercent] = useState('0');
   const [invoicePpnMode, setInvoicePpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [invoicePpnRateInput, setInvoicePpnRateInput] = useState('');
-  const [invoiceSellingPrice, setInvoiceSellingPrice] = useState('');
   const [invoiceMarginPercent, setInvoiceMarginPercent] = useState('');
   const [ppnMode, setPpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [ppnRateInput, setPpnRateInput] = useState('');
@@ -104,7 +103,6 @@ export default function CalculatorPage() {
           discountPercent: parseNumberInput(invoiceDiscountPercent),
           ppnMode: invoicePpnMode,
           ppnRate: invoicePpnRate,
-          sellingPrice: invoiceSellingPrice ? parseMoneyInput(invoiceSellingPrice) : undefined,
         }),
         error: null,
       };
@@ -122,7 +120,6 @@ export default function CalculatorPage() {
     invoicePiecesPerCarton,
     invoicePpnMode,
     invoicePpnRate,
-    invoiceSellingPrice,
   ]);
 
   const activeMarginRules = useMemo(() => {
@@ -319,7 +316,6 @@ export default function CalculatorPage() {
     setInvoiceDiscountPercent('0');
     setInvoicePpnMode(PpnMode.NO_PPN);
     setInvoicePpnRateInput('');
-    setInvoiceSellingPrice('');
     setInvoiceMarginPercent('');
   };
 
@@ -499,18 +495,6 @@ export default function CalculatorPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-1">Harga Jual per Pcs</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                className="input"
-                value={invoiceSellingPrice}
-                onChange={event => setInvoiceSellingPrice(event.target.value)}
-                placeholder="Contoh: 15000"
-              />
-            </div>
-
-            <div>
               <label className="block text-sm font-medium mb-1">Margin Manual (%)</label>
               <input
                 type="number"
@@ -597,26 +581,6 @@ export default function CalculatorPage() {
                     <div className="flex justify-between">
                       <span>Margin Aktual dari Margin:</span>
                       <span className="font-medium">{formatNumber(invoiceMarginResult.actualMargin)}%</span>
-                    </div>
-                  </>
-                )}
-                {invoiceResult.sellingPrice !== undefined && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Harga Jual Input:</span>
-                      <span className="font-medium">{formatCurrency(invoiceResult.sellingPrice)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Profit per Pcs:</span>
-                      <span className="font-medium text-emerald-600">{formatCurrency(invoiceResult.profitPerUnit ?? 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Margin Aktual:</span>
-                      <span className="font-medium">{formatNumber(invoiceResult.actualMargin ?? 0)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Total Jual:</span>
-                      <span className="font-medium">{formatCurrency(invoiceResult.totalSellingPrice ?? 0)}</span>
                     </div>
                   </>
                 )}
