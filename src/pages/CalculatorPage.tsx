@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type PriceCalculation } from '../db/db';
-import { TaxCalculatorService, PpnMode } from '../services/TaxCalculatorService';
+import { TaxCalculatorService, PpnMode, type TaxCalculationResult } from '../services/TaxCalculatorService';
 import { PricingCalculatorService, type PricingResult } from '../services/PricingCalculatorService';
 import { MarginRuleResolver } from '../services/MarginRuleResolver';
 import { ApprovalService } from '../services/ApprovalService';
+import { UnitCostAllocationService } from '../services/UnitCostAllocationService';
 import { formatCurrency, formatNumber } from '../utils/format';
 
 const toDateInput = (date: Date): string => {
@@ -14,9 +15,14 @@ const toDateInput = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+type CostInputMode = 'PER_UNIT' | 'TOTAL_RECEIVED';
+
 export default function CalculatorPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedUnitId, setSelectedUnitId] = useState('');
+  const [costInputMode, setCostInputMode] = useState<CostInputMode>('PER_UNIT');
+  const [receivedUnitId, setReceivedUnitId] = useState('');
+  const [receivedQuantity, setReceivedQuantity] = useState('1');
   const [manualCost, setManualCost] = useState('');
   const [ppnMode, setPpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [ppnRateInput, setPpnRateInput] = useState('');
@@ -37,6 +43,8 @@ export default function CalculatorPage() {
   const units = loadedUnits ?? [];
   const selectedProduct = products.find(product => product.id === selectedProductId);
   const selectedUnit = units.find(unit => unit.id === selectedUnitId);
+  const selectedReceivedUnit = units.find(unit => unit.id === receivedUnitId);
+  const isTotalReceivedMode = costInputMode === 'TOTAL_RECEIVED';
   const pricingModePolicy = selectedProduct
     ? PricingCalculatorService.getPricingModePolicy(selectedProduct.pricingMode)
     : null;
@@ -69,38 +77,96 @@ export default function CalculatorPage() {
 
   const marginInput = marginOverride || resolvedMargin?.marginPercent.toString() || '';
   const costValue = Number(manualCost);
+  const receivedQuantityValue = Number(receivedQuantity);
   const marginValue = Number(marginInput);
 
+  const targetUnitQuantityPreview = useMemo(() => {
+    if (!isTotalReceivedMode || !selectedUnit || !selectedReceivedUnit || !receivedQuantity) return null;
+    try {
+      return UnitCostAllocationService.calculateTargetUnitQuantity(
+        receivedQuantityValue,
+        selectedReceivedUnit.conversionToBase,
+        selectedUnit.conversionToBase,
+      );
+    } catch {
+      return null;
+    }
+  }, [isTotalReceivedMode, receivedQuantity, receivedQuantityValue, selectedReceivedUnit, selectedUnit]);
+
   const calculation = useMemo((): {
-    taxResult: ReturnType<typeof TaxCalculatorService.calculate> | null;
+    taxResult: TaxCalculationResult | null;
+    totalTaxResult: TaxCalculationResult | null;
+    targetUnitQuantity: number | null;
     pricingResult: PricingResult | null;
     error: string | null;
   } => {
     if (!manualCost || !marginInput) {
-      return { taxResult: null, pricingResult: null, error: null };
+      return { taxResult: null, totalTaxResult: null, targetUnitQuantity: null, pricingResult: null, error: null };
     }
 
     try {
-      const taxResult = TaxCalculatorService.calculate(costValue, ppnMode, ppnRate);
+      const totalTaxResult = TaxCalculatorService.calculate(costValue, ppnMode, ppnRate);
+      let taxResult = totalTaxResult;
+      let targetUnitQuantity: number | null = null;
+
+      if (isTotalReceivedMode) {
+        if (!selectedUnit) {
+          throw new Error('Pilih satuan jual yang akan dihitung.');
+        }
+        if (!selectedReceivedUnit) {
+          throw new Error('Pilih satuan barang datang.');
+        }
+
+        const allocation = UnitCostAllocationService.allocateTaxResultToTargetUnit(
+          totalTaxResult,
+          receivedQuantityValue,
+          selectedReceivedUnit.conversionToBase,
+          selectedUnit.conversionToBase,
+        );
+        taxResult = allocation.taxResult;
+        targetUnitQuantity = allocation.targetUnitQuantity;
+      }
+
       const pricingResult = PricingCalculatorService.calculatePrice(taxResult.finalCost, marginValue, {
         minPrice: selectedUnit?.minSellingPrice,
         maxPrice: selectedUnit?.maxSellingPrice,
       });
-      return { taxResult, pricingResult, error: null };
+      return {
+        taxResult,
+        totalTaxResult: isTotalReceivedMode ? totalTaxResult : null,
+        targetUnitQuantity,
+        pricingResult,
+        error: null,
+      };
     } catch (error) {
       return {
         taxResult: null,
+        totalTaxResult: null,
+        targetUnitQuantity: null,
         pricingResult: null,
         error: error instanceof Error ? error.message : 'Input kalkulasi tidak valid.',
       };
     }
-  }, [costValue, manualCost, marginInput, marginValue, ppnMode, ppnRate, selectedUnit]);
+  }, [
+    costValue,
+    isTotalReceivedMode,
+    manualCost,
+    marginInput,
+    marginValue,
+    ppnMode,
+    ppnRate,
+    receivedQuantityValue,
+    selectedReceivedUnit,
+    selectedUnit,
+  ]);
 
-  const { taxResult, pricingResult, error: calculationError } = calculation;
+  const { taxResult, totalTaxResult, targetUnitQuantity, pricingResult, error: calculationError } = calculation;
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
     setSelectedUnitId('');
+    setReceivedUnitId('');
+    setReceivedQuantity('1');
     setManualCost('');
     setMarginOverride('');
     setLockedConfirmed(false);
@@ -108,8 +174,19 @@ export default function CalculatorPage() {
 
   const handleUnitChange = (unitId: string) => {
     setSelectedUnitId(unitId);
+    setReceivedUnitId(unitId);
+    setReceivedQuantity('1');
     const unit = units.find(item => item.id === unitId);
-    setManualCost(unit?.manualCost ? unit.manualCost.toString() : '');
+    setManualCost(costInputMode === 'PER_UNIT' && unit?.manualCost ? unit.manualCost.toString() : '');
+  };
+
+  const handleCostInputModeChange = (mode: CostInputMode) => {
+    setCostInputMode(mode);
+    setReceivedUnitId(selectedUnitId);
+    setReceivedQuantity('1');
+
+    const unit = units.find(item => item.id === selectedUnitId);
+    setManualCost(mode === 'PER_UNIT' && unit?.manualCost ? unit.manualCost.toString() : '');
   };
 
   const getPriceWarningMessage = () => {
@@ -123,6 +200,8 @@ export default function CalculatorPage() {
   const resetForm = () => {
     setSelectedProductId('');
     setSelectedUnitId('');
+    setReceivedUnitId('');
+    setReceivedQuantity('1');
     setManualCost('');
     setMarginOverride('');
     setChangeReason('');
@@ -221,9 +300,9 @@ export default function CalculatorPage() {
 
           {selectedProductId && (
             <div>
-              <label className="block text-sm font-medium mb-1">Satuan</label>
+              <label className="block text-sm font-medium mb-1">Satuan Jual yang Dihitung</label>
               <select className="input" value={selectedUnitId} onChange={event => handleUnitChange(event.target.value)}>
-                <option value="">Pilih Satuan...</option>
+                <option value="">Pilih satuan jual...</option>
                 {units.map(unit => (
                   <option key={unit.id} value={unit.id}>{unit.unitName}</option>
                 ))}
@@ -249,13 +328,73 @@ export default function CalculatorPage() {
 
         <div className="card space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Harga Modal (Input)</label>
+            <label className="block text-sm font-medium mb-1">Mode Input Modal</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleCostInputModeChange('PER_UNIT')}
+                className={`h-10 rounded-md border text-xs font-semibold transition-colors ${
+                  costInputMode === 'PER_UNIT' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-textMuted'
+                }`}
+              >
+                Per Satuan
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCostInputModeChange('TOTAL_RECEIVED')}
+                className={`h-10 rounded-md border text-xs font-semibold transition-colors ${
+                  costInputMode === 'TOTAL_RECEIVED' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-textMuted'
+                }`}
+              >
+                Total Datang
+              </button>
+            </div>
+          </div>
+
+          {isTotalReceivedMode && (
+            <div className="space-y-3 rounded-lg border border-border bg-gray-50 p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Satuan Datang</label>
+                  <select className="input" value={receivedUnitId} onChange={event => setReceivedUnitId(event.target.value)}>
+                    <option value="">Pilih satuan...</option>
+                    {units.map(unit => (
+                      <option key={unit.id} value={unit.id}>{unit.unitName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Jumlah Datang</label>
+                  <input
+                    type="number"
+                    className="input"
+                    min="0"
+                    step="any"
+                    value={receivedQuantity}
+                    onChange={event => setReceivedQuantity(event.target.value)}
+                    placeholder="Contoh: 1"
+                  />
+                </div>
+              </div>
+
+              {targetUnitQuantityPreview !== null && selectedUnit && selectedReceivedUnit && (
+                <div className="rounded-md bg-white p-2 text-xs font-medium text-textMuted">
+                  {formatNumber(receivedQuantityValue)} {selectedReceivedUnit.unitName} = {formatNumber(targetUnitQuantityPreview)} {selectedUnit.unitName}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {isTotalReceivedMode ? 'Harga Modal Total Barang Datang' : `Harga Modal per ${selectedUnit?.unitName || 'Satuan'}`}
+            </label>
             <input
               type="number"
               className="input"
               value={manualCost}
               onChange={event => setManualCost(event.target.value)}
-              placeholder="Contoh: 10000"
+              placeholder={isTotalReceivedMode ? 'Contoh: 120000' : 'Contoh: 10000'}
             />
           </div>
 
@@ -335,32 +474,48 @@ export default function CalculatorPage() {
             <h2 className="text-lg font-bold text-indigo-900 mb-2">Hasil Kalkulasi</h2>
 
             <div className="space-y-2 text-sm text-indigo-800">
+              {isTotalReceivedMode && totalTaxResult && targetUnitQuantity && selectedUnit && (
+                <div className="mb-3 pb-3 border-b border-indigo-200/60 space-y-2">
+                  <div className="flex justify-between text-indigo-600">
+                    <span>Total modal masuk:</span>
+                    <span>{formatCurrency(totalTaxResult.inputCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-indigo-600">
+                    <span>Total setelah PPN:</span>
+                    <span>{formatCurrency(totalTaxResult.finalCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-indigo-600">
+                    <span>Dibagi ke:</span>
+                    <span>{formatNumber(targetUnitQuantity)} {selectedUnit.unitName}</span>
+                  </div>
+                </div>
+              )}
               {taxResult.ppnMode !== PpnMode.NO_PPN && (
                 <div className="mb-3 pb-3 border-b border-indigo-200/60 space-y-2">
                   <div className="flex justify-between text-indigo-600">
-                    <span>Harga Input:</span>
+                    <span>Harga Input per {selectedUnit?.unitName || 'satuan'}:</span>
                     <span>{formatCurrency(taxResult.inputCost)}</span>
                   </div>
                   <div className="flex justify-between text-indigo-600">
-                    <span>Dasar Pengenaan Pajak (DPP):</span>
+                    <span>DPP per {selectedUnit?.unitName || 'satuan'}:</span>
                     <span>{formatCurrency(taxResult.baseCost)}</span>
                   </div>
                   <div className="flex justify-between text-indigo-600">
-                    <span>PPN ({taxResult.ppnRate}%):</span>
+                    <span>PPN per {selectedUnit?.unitName || 'satuan'} ({taxResult.ppnRate}%):</span>
                     <span>+{formatCurrency(taxResult.ppnAmount)}</span>
                   </div>
                 </div>
               )}
               <div className="flex justify-between font-semibold">
-                <span>Modal Final (setelah PPN):</span>
+                <span>Modal Final per {selectedUnit?.unitName || 'satuan'}:</span>
                 <span>{formatCurrency(taxResult.finalCost)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Harga Rekomendasi:</span>
+                <span>Harga Rekomendasi per {selectedUnit?.unitName || 'satuan'}:</span>
                 <span className="font-medium">{formatCurrency(pricingResult.recommendedPrice)}</span>
               </div>
               <div className="flex justify-between py-2 border-y border-indigo-200 my-2">
-                <span className="font-bold">Harga Jual (Dibulatkan):</span>
+                <span className="font-bold">Harga Jual per {selectedUnit?.unitName || 'satuan'}:</span>
                 <span className="font-bold text-lg text-primary">{formatCurrency(pricingResult.roundedPrice)}</span>
               </div>
               <div className="flex justify-between">
