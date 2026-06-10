@@ -1,8 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type MarginRule } from '../db/db';
 import { ArrowLeft, Save } from 'lucide-react';
+
+const findExistingMarginRule = (
+  rules: MarginRule[],
+  ruleType: MarginRule['ruleType'],
+  referenceId: string,
+) => {
+  if (ruleType !== 'STORE_DEFAULT' && !referenceId) return undefined;
+
+  return rules
+    .filter(rule => {
+      if (rule.ruleType !== ruleType) return false;
+      if (rule.ruleType === 'STORE_DEFAULT') return true;
+      return rule.referenceId?.toString() === referenceId;
+    })
+    .sort((a, b) => (
+      Number(b.isActive) - Number(a.isActive)
+      || (b.effectiveFrom ?? '').localeCompare(a.effectiveFrom ?? '')
+    ))[0];
+};
 
 export default function MarginRuleFormPage() {
   const { id } = useParams();
@@ -13,6 +32,8 @@ export default function MarginRuleFormPage() {
   const brands = useLiveQuery(() => db.brands.toArray()) || [];
   const suppliers = useLiveQuery(() => db.suppliers.toArray()) || [];
   const products = useLiveQuery(() => db.products.toArray()) || [];
+  const loadedMarginRules = useLiveQuery(() => db.marginRules.toArray());
+  const marginRules = useMemo(() => loadedMarginRules ?? [], [loadedMarginRules]);
 
   const [ruleType, setRuleType] = useState<MarginRule['ruleType']>('CATEGORY');
   const [referenceId, setReferenceId] = useState<string>('');
@@ -35,6 +56,49 @@ export default function MarginRuleFormPage() {
       });
     }
   }, [isEdit, id]);
+
+  const existingRuleForSelection = useMemo(() => {
+    if (isEdit) return undefined;
+    return findExistingMarginRule(marginRules, ruleType, referenceId);
+  }, [isEdit, marginRules, referenceId, ruleType]);
+
+  const clearNewRuleValues = () => {
+    setMarginPercent('');
+    setEffectiveFrom('');
+    setEffectiveUntil('');
+    setIsActive(true);
+  };
+
+  const applyExistingRuleValues = (type: MarginRule['ruleType'], targetId: string) => {
+    if (isEdit) return;
+
+    const existingRule = findExistingMarginRule(marginRules, type, targetId);
+    if (!existingRule) {
+      clearNewRuleValues();
+      return;
+    }
+
+    setMarginPercent(existingRule.marginPercent.toString());
+    setEffectiveFrom(existingRule.effectiveFrom || '');
+    setEffectiveUntil(existingRule.effectiveUntil || '');
+    setIsActive(existingRule.isActive);
+  };
+
+  const handleRuleTypeChange = (type: MarginRule['ruleType']) => {
+    setRuleType(type);
+    setReferenceId('');
+
+    if (type === 'STORE_DEFAULT') {
+      applyExistingRuleValues(type, '');
+    } else if (!isEdit) {
+      clearNewRuleValues();
+    }
+  };
+
+  const handleReferenceChange = (targetId: string) => {
+    setReferenceId(targetId);
+    applyExistingRuleValues(ruleType, targetId);
+  };
 
   const getPriority = (type: MarginRule['ruleType']) => {
     switch(type) {
@@ -67,7 +131,7 @@ export default function MarginRuleFormPage() {
 
     try {
       const marginRuleData: MarginRule = {
-        id: id || crypto.randomUUID(),
+        id: id || existingRuleForSelection?.id || crypto.randomUUID(),
         ruleType,
         referenceId: ruleType === 'STORE_DEFAULT' ? undefined : referenceId,
         marginPercent: parsedMargin,
@@ -101,10 +165,7 @@ export default function MarginRuleFormPage() {
         <div className="card space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">Tipe Aturan</label>
-            <select className="input" value={ruleType} onChange={e => {
-                setRuleType(e.target.value as MarginRule['ruleType']);
-                setReferenceId('');
-            }}>
+            <select className="input" value={ruleType} onChange={e => handleRuleTypeChange(e.target.value as MarginRule['ruleType'])}>
               <option value="STORE_DEFAULT">Store Default</option>
               <option value="CATEGORY">Kategori</option>
               <option value="BRAND">Brand</option>
@@ -116,7 +177,7 @@ export default function MarginRuleFormPage() {
           {ruleType === 'CATEGORY' && (
             <div>
               <label className="block text-sm font-medium mb-1">Target Kategori</label>
-              <select className="input" value={referenceId} onChange={e => setReferenceId(e.target.value)}>
+              <select className="input" value={referenceId} onChange={e => handleReferenceChange(e.target.value)}>
                 <option value="">Pilih Kategori...</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -126,7 +187,7 @@ export default function MarginRuleFormPage() {
           {ruleType === 'BRAND' && (
             <div>
               <label className="block text-sm font-medium mb-1">Target Brand</label>
-              <select className="input" value={referenceId} onChange={e => setReferenceId(e.target.value)}>
+              <select className="input" value={referenceId} onChange={e => handleReferenceChange(e.target.value)}>
                 <option value="">Pilih Brand...</option>
                 {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
@@ -136,7 +197,7 @@ export default function MarginRuleFormPage() {
           {ruleType === 'SUPPLIER' && (
             <div>
               <label className="block text-sm font-medium mb-1">Target Supplier</label>
-              <select className="input" value={referenceId} onChange={e => setReferenceId(e.target.value)}>
+              <select className="input" value={referenceId} onChange={e => handleReferenceChange(e.target.value)}>
                 <option value="">Pilih Supplier...</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -146,7 +207,7 @@ export default function MarginRuleFormPage() {
           {ruleType === 'PRODUCT' && (
             <div>
               <label className="block text-sm font-medium mb-1">Target Produk</label>
-              <select className="input" value={referenceId} onChange={e => setReferenceId(e.target.value)}>
+              <select className="input" value={referenceId} onChange={e => handleReferenceChange(e.target.value)}>
                 <option value="">Pilih Produk...</option>
                 {products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
               </select>
@@ -157,6 +218,12 @@ export default function MarginRuleFormPage() {
             <label className="block text-sm font-medium mb-1">Margin (%) dari Harga Jual</label>
             <input type="number" className="input" value={marginPercent} onChange={e => setMarginPercent(e.target.value)} placeholder="Contoh: 15" />
           </div>
+
+          {existingRuleForSelection && (
+            <div className="rounded-lg bg-amber-50 p-3 text-xs font-medium text-amber-800">
+              Target ini sudah punya aturan margin. Nilai tersimpan dimuat otomatis dan akan diperbarui saat disimpan.
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>
