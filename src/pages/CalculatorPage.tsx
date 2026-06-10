@@ -16,6 +16,7 @@ const toDateInput = (date: Date): string => {
 };
 
 type CostInputMode = 'PER_UNIT' | 'TOTAL_RECEIVED';
+const CUSTOM_RECEIVED_UNIT_ID = '__CUSTOM_RECEIVED_UNIT__';
 
 export default function CalculatorPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -23,6 +24,7 @@ export default function CalculatorPage() {
   const [costInputMode, setCostInputMode] = useState<CostInputMode>('PER_UNIT');
   const [receivedUnitId, setReceivedUnitId] = useState('');
   const [receivedQuantity, setReceivedQuantity] = useState('1');
+  const [customReceivedUnitSize, setCustomReceivedUnitSize] = useState('');
   const [manualCost, setManualCost] = useState('');
   const [ppnMode, setPpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [ppnRateInput, setPpnRateInput] = useState('');
@@ -45,6 +47,7 @@ export default function CalculatorPage() {
   const selectedUnit = units.find(unit => unit.id === selectedUnitId);
   const selectedReceivedUnit = units.find(unit => unit.id === receivedUnitId);
   const isTotalReceivedMode = costInputMode === 'TOTAL_RECEIVED';
+  const isCustomReceivedUnit = receivedUnitId === CUSTOM_RECEIVED_UNIT_ID;
   const pricingModePolicy = selectedProduct
     ? PricingCalculatorService.getPricingModePolicy(selectedProduct.pricingMode)
     : null;
@@ -78,20 +81,25 @@ export default function CalculatorPage() {
   const marginInput = marginOverride || resolvedMargin?.marginPercent.toString() || '';
   const costValue = Number(manualCost);
   const receivedQuantityValue = Number(receivedQuantity);
+  const customReceivedUnitSizeValue = Number(customReceivedUnitSize);
+  const receivedUnitConversion = isCustomReceivedUnit && selectedUnit
+    ? selectedUnit.conversionToBase * customReceivedUnitSizeValue
+    : selectedReceivedUnit?.conversionToBase;
+  const receivedUnitLabel = isCustomReceivedUnit ? 'barang datang' : selectedReceivedUnit?.unitName;
   const marginValue = Number(marginInput);
 
   const targetUnitQuantityPreview = useMemo(() => {
-    if (!isTotalReceivedMode || !selectedUnit || !selectedReceivedUnit || !receivedQuantity) return null;
+    if (!isTotalReceivedMode || !selectedUnit || !receivedUnitConversion || !receivedQuantity) return null;
     try {
       return UnitCostAllocationService.calculateTargetUnitQuantity(
         receivedQuantityValue,
-        selectedReceivedUnit.conversionToBase,
+        receivedUnitConversion,
         selectedUnit.conversionToBase,
       );
     } catch {
       return null;
     }
-  }, [isTotalReceivedMode, receivedQuantity, receivedQuantityValue, selectedReceivedUnit, selectedUnit]);
+  }, [isTotalReceivedMode, receivedQuantity, receivedQuantityValue, receivedUnitConversion, selectedUnit]);
 
   const calculation = useMemo((): {
     taxResult: TaxCalculationResult | null;
@@ -113,14 +121,17 @@ export default function CalculatorPage() {
         if (!selectedUnit) {
           throw new Error('Pilih satuan jual yang akan dihitung.');
         }
-        if (!selectedReceivedUnit) {
+        if (isCustomReceivedUnit && (!customReceivedUnitSize || !Number.isFinite(customReceivedUnitSizeValue) || customReceivedUnitSizeValue <= 0)) {
+          throw new Error('Isi per satuan datang harus lebih dari 0.');
+        }
+        if (!receivedUnitConversion) {
           throw new Error('Pilih satuan barang datang.');
         }
 
         const allocation = UnitCostAllocationService.allocateTaxResultToTargetUnit(
           totalTaxResult,
           receivedQuantityValue,
-          selectedReceivedUnit.conversionToBase,
+          receivedUnitConversion,
           selectedUnit.conversionToBase,
         );
         taxResult = allocation.taxResult;
@@ -149,14 +160,17 @@ export default function CalculatorPage() {
     }
   }, [
     costValue,
+    customReceivedUnitSize,
+    customReceivedUnitSizeValue,
     isTotalReceivedMode,
+    isCustomReceivedUnit,
     manualCost,
     marginInput,
     marginValue,
     ppnMode,
     ppnRate,
     receivedQuantityValue,
-    selectedReceivedUnit,
+    receivedUnitConversion,
     selectedUnit,
   ]);
 
@@ -167,6 +181,7 @@ export default function CalculatorPage() {
     setSelectedUnitId('');
     setReceivedUnitId('');
     setReceivedQuantity('1');
+    setCustomReceivedUnitSize('');
     setManualCost('');
     setMarginOverride('');
     setLockedConfirmed(false);
@@ -176,6 +191,7 @@ export default function CalculatorPage() {
     setSelectedUnitId(unitId);
     setReceivedUnitId(unitId);
     setReceivedQuantity('1');
+    setCustomReceivedUnitSize('');
     const unit = units.find(item => item.id === unitId);
     setManualCost(costInputMode === 'PER_UNIT' && unit?.manualCost ? unit.manualCost.toString() : '');
   };
@@ -184,6 +200,7 @@ export default function CalculatorPage() {
     setCostInputMode(mode);
     setReceivedUnitId(selectedUnitId);
     setReceivedQuantity('1');
+    setCustomReceivedUnitSize('');
 
     const unit = units.find(item => item.id === selectedUnitId);
     setManualCost(mode === 'PER_UNIT' && unit?.manualCost ? unit.manualCost.toString() : '');
@@ -202,6 +219,7 @@ export default function CalculatorPage() {
     setSelectedUnitId('');
     setReceivedUnitId('');
     setReceivedQuantity('1');
+    setCustomReceivedUnitSize('');
     setManualCost('');
     setMarginOverride('');
     setChangeReason('');
@@ -361,6 +379,7 @@ export default function CalculatorPage() {
                     {units.map(unit => (
                       <option key={unit.id} value={unit.id}>{unit.unitName}</option>
                     ))}
+                    <option value={CUSTOM_RECEIVED_UNIT_ID}>Input isi manual</option>
                   </select>
                 </div>
                 <div>
@@ -377,9 +396,24 @@ export default function CalculatorPage() {
                 </div>
               </div>
 
-              {targetUnitQuantityPreview !== null && selectedUnit && selectedReceivedUnit && (
+              {isCustomReceivedUnit && selectedUnit && (
+                <div>
+                  <label className="block text-xs font-medium mb-1">Isi per Satuan Datang</label>
+                  <input
+                    type="number"
+                    className="input"
+                    min="0"
+                    step="any"
+                    value={customReceivedUnitSize}
+                    onChange={event => setCustomReceivedUnitSize(event.target.value)}
+                    placeholder={`Contoh: 12 ${selectedUnit.unitName}`}
+                  />
+                </div>
+              )}
+
+              {targetUnitQuantityPreview !== null && selectedUnit && receivedUnitLabel && (
                 <div className="rounded-md bg-white p-2 text-xs font-medium text-textMuted">
-                  {formatNumber(receivedQuantityValue)} {selectedReceivedUnit.unitName} = {formatNumber(targetUnitQuantityPreview)} {selectedUnit.unitName}
+                  {formatNumber(receivedQuantityValue)} {receivedUnitLabel} = {formatNumber(targetUnitQuantityPreview)} {selectedUnit.unitName}
                 </div>
               )}
             </div>
