@@ -204,6 +204,18 @@ Seed data mencakup kategori seperti Mie Instan, Minuman, Beras, Minyak, Gula, Ro
 
 ## Changelog
 
+### Unreleased - 2026-06-11
+
+- Menambahkan mode `Faktur` di Kalkulator untuk menghitung harga dari nota supplier tanpa harus memilih produk dari master data.
+- Kalkulator Faktur mendukung input `Crt`, `Pcs`, `Isi/Karton`, `Harga Karton`, `Diskon (%)`, mode PPN, dan `Margin Manual (%)`.
+- Kalkulator Faktur menampilkan total pcs, setara karton, total setelah diskon/PPN, modal per pcs, harga jual dari margin, profit, dan margin aktual.
+- Input harga pada Kalkulator Faktur mendukung format angka umum seperti `120000`, `120.000`, `120,000`, dan shorthand ribuan seperti `26,5`.
+- Menambahkan perhitungan modal dari barang datang total ke satuan jual, termasuk kasus 1 karton isi banyak pcs dan partial pcs.
+- Menambahkan pilihan `Input isi manual` pada `Satuan Datang` agar perhitungan karton/paket tetap bisa dilakukan meskipun satuan tersebut belum ada di master produk.
+- Merapikan UX Riwayat Harga agar filter produk dan kategori saling mengikuti sehingga kombinasi produk-kategori yang salah tidak mudah dipilih.
+- Merapikan UX Tambah Margin agar kombinasi tipe aturan dan target yang sudah ada otomatis memuat margin tersimpan dan update rule existing, bukan membuat duplikat.
+- Menambahkan unit test untuk perhitungan faktur dan pembagian modal total ke satuan jual.
+
 ### 0.1.0
 
 - MVP local-first dengan kalkulator pricing, product inventory, margin rules, approval flow, history, settings, seed data, dan unit test formula.
