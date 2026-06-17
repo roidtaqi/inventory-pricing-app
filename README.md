@@ -39,7 +39,7 @@ npm run dev
 
 Alur:
 
-1. Buka `Lainnya -> Real-time Sync`.
+1. Buka `Home -> Data & Pengaturan -> Sync`.
 2. Isi URL `ws://localhost:8787`.
 3. Aktifkan real-time sync.
 4. Klik `Simpan & Connect`.
@@ -217,7 +217,7 @@ src/pages
 
 ## Format CSV Produk
 
-Import CSV tersedia dari `Lainnya -> Import CSV`. Kolom yang didukung:
+Import CSV tersedia dari `Home -> Data & Pengaturan -> Import`. Kolom yang didukung:
 
 ```csv
 sku,name,category,brand,supplier,unit_name,conversion_to_base,manual_cost,active_selling_price,min_selling_price,max_selling_price,barcode,pricing_mode,ppn_mode,ppn_rate,effective_date,notes
@@ -237,6 +237,15 @@ Nilai `pricing_mode` mendukung `AUTO_MARGIN`, `MANUAL_PRICE`, `LOCKED_PRICE`. Ni
 Seed data mencakup kategori seperti Mie Instan, Minuman, Beras, Minyak, Gula, Rokok, Telur, dan Bumbu Dapur, plus contoh produk Indomie Goreng, Mie Sedaap Soto, Aqua 600ml, Beras Ramos 5kg, Minyak Goreng 1L, Gula Pasir 1kg, dan Telur Ayam 1kg.
 
 ## Changelog
+
+### Unreleased - 2026-06-17
+
+- Mengubah arah UX utama menjadi workflow-guided: `Setup -> Produk -> Margin -> Hitung -> Approval -> Riwayat`.
+- Menambahkan `Home` sebagai halaman awal yang lebih ringkas untuk akses hitung harga, menu utama, dan data/pengaturan.
+- Mengubah bottom navigation menjadi `Home`, `Produk`, `Hitung`, `Approval`, dan `Riwayat`.
+- Memindahkan Kalkulator ke route `/calculator` dengan shortcut `/calculator?mode=invoice` dan `/calculator?mode=product`.
+- Merapikan Kalkulator agar diawali pilihan mode `Hitung dari Faktur Supplier` atau `Hitung dari Produk Terdaftar`.
+- Mengganti akses setup dari menu `Lainnya` ke Home agar Pengaturan, Master Data, Import, dan Sync tetap mudah ditemukan.
 
 ### Unreleased - 2026-06-11
 

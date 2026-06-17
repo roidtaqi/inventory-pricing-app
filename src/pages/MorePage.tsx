@@ -37,7 +37,7 @@ const menuItems = [
 export default function MorePage() {
   return (
     <div className="p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4 text-primary">Lainnya</h1>
+      <h1 className="text-2xl font-bold mb-4 text-primary">Setup & Data</h1>
 
       <div className="space-y-3">
         {menuItems.map(item => {

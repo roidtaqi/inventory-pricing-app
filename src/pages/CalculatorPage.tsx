@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type PriceCalculation } from '../db/db';
 import { TaxCalculatorService, PpnMode, type TaxCalculationResult } from '../services/TaxCalculatorService';
@@ -40,7 +41,7 @@ const parseMoneyInput = (value: string): number => {
 
 export default function CalculatorPage() {
   const { showAlert } = useAppAlert();
-  const [calculatorMode, setCalculatorMode] = useState<CalculatorMode>('INVOICE');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [costInputMode, setCostInputMode] = useState<CostInputMode>('PER_UNIT');
@@ -91,6 +92,25 @@ export default function CalculatorPage() {
   }, [settings]);
   const ppnRate = Number(ppnRateInput || defaultPpnRate);
   const invoicePpnRate = parseNumberInput(invoicePpnRateInput || defaultPpnRate.toString());
+
+  const calculatorMode = useMemo<CalculatorMode | null>(() => {
+    const mode = searchParams.get('mode');
+    if (mode === 'invoice') {
+      return 'INVOICE';
+    }
+    if (mode === 'product') {
+      return 'PRODUCT';
+    }
+    return null;
+  }, [searchParams]);
+
+  const handleSelectCalculatorMode = (mode: CalculatorMode) => {
+    setSearchParams({ mode: mode === 'INVOICE' ? 'invoice' : 'product' });
+  };
+
+  const handleChangeCalculatorMode = () => {
+    setSearchParams({});
+  };
 
   const invoiceCalculation = useMemo((): { result: InvoiceLineResult | null; error: string | null } => {
     if (!invoiceCartonCost) {
@@ -400,28 +420,52 @@ export default function CalculatorPage() {
     <div className="p-4 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-4 text-primary">Kalkulator Harga</h1>
 
-      <div className="mb-4 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => setCalculatorMode('INVOICE')}
-          className={`h-10 rounded-md border text-sm font-semibold transition-colors ${
-            calculatorMode === 'INVOICE' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-textMuted'
-          }`}
-        >
-          Faktur
-        </button>
-        <button
-          type="button"
-          onClick={() => setCalculatorMode('PRODUCT')}
-          className={`h-10 rounded-md border text-sm font-semibold transition-colors ${
-            calculatorMode === 'PRODUCT' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-textMuted'
-          }`}
-        >
-          Produk
-        </button>
-      </div>
+      {!calculatorMode ? (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-bold text-textMain">Mau hitung dari mana?</h2>
+            <p className="mt-1 text-sm leading-6 text-textMuted">
+              Pilih sumber hitungan agar input yang tampil sesuai kebutuhan.
+            </p>
+          </div>
 
-      {calculatorMode === 'INVOICE' ? (
+          <button
+            type="button"
+            onClick={() => handleSelectCalculatorMode('INVOICE')}
+            className="card w-full text-left transition-colors hover:border-primary"
+          >
+            <div className="text-base font-bold text-textMain">Hitung dari Faktur Supplier</div>
+            <div className="mt-1 text-sm leading-6 text-textMuted">
+              Gunakan untuk menghitung modal dari karton, pcs, isi/karton, diskon, dan PPN.
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectCalculatorMode('PRODUCT')}
+            className="card w-full text-left transition-colors hover:border-primary"
+          >
+            <div className="text-base font-bold text-textMain">Hitung dari Produk Terdaftar</div>
+            <div className="mt-1 text-sm leading-6 text-textMuted">
+              Gunakan untuk update harga produk yang sudah ada di database.
+            </div>
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3">
+            <div className="min-w-0">
+              <div className="text-xs font-bold uppercase text-textMuted">Mode Hitung</div>
+              <div className="truncate text-sm font-bold text-textMain">
+                {calculatorMode === 'INVOICE' ? 'Hitung dari Faktur Supplier' : 'Hitung dari Produk Terdaftar'}
+              </div>
+            </div>
+            <button type="button" onClick={handleChangeCalculatorMode} className="shrink-0 rounded-md bg-gray-50 px-3 py-2 text-xs font-semibold text-primary">
+              Ganti Mode Hitung
+            </button>
+          </div>
+
+          {calculatorMode === 'INVOICE' ? (
         <div className="space-y-4">
           <div className="card space-y-3">
             <div className="grid grid-cols-2 gap-2">
@@ -657,7 +701,7 @@ export default function CalculatorPage() {
             </div>
           )}
         </div>
-      ) : (
+          ) : (
       <div className="space-y-4">
         <div className="card space-y-3">
           <div>
@@ -942,6 +986,8 @@ export default function CalculatorPage() {
           <button onClick={() => handleSaveCalculation('WAITING_APPROVAL')} disabled={!pricingResult} className="btn-primary flex-1">Ajukan Approval</button>
         </div>
       </div>
+          )}
+        </>
       )}
     </div>
   );

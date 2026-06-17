@@ -91,7 +91,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface p-4">
-        <Link to="/more" aria-label="Kembali" className="rounded-full p-2 -ml-2 text-textMain hover:bg-gray-100">
+        <Link to="/" aria-label="Kembali" className="rounded-full p-2 -ml-2 text-textMain hover:bg-gray-100">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <h1 className="text-xl font-bold text-textMain">Settings</h1>

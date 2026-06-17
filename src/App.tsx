@@ -1,9 +1,10 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Calculator, Box, Percent, CheckSquare, MoreHorizontal } from 'lucide-react';
+import { Calculator, CheckSquare, History, Home, Package } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect } from 'react';
 import { seedDatabase } from './db/seed';
 
+import HomePage from './pages/HomePage';
 import CalculatorPage from './pages/CalculatorPage';
 import ProductsPage from './pages/ProductsPage';
 import ProductFormPage from './pages/ProductFormPage';
@@ -28,18 +29,19 @@ function App() {
   }, []);
 
   const navItems = [
-    { path: '/', label: 'Kalkulator', icon: Calculator },
-    { path: '/products', label: 'Produk', icon: Box },
-    { path: '/margin', label: 'Margin', icon: Percent },
+    { path: '/', label: 'Home', icon: Home },
+    { path: '/products', label: 'Produk', icon: Package },
+    { path: '/calculator', label: 'Hitung', icon: Calculator },
     { path: '/approval', label: 'Approval', icon: CheckSquare },
-    { path: '/more', label: 'Lainnya', icon: MoreHorizontal },
+    { path: '/history', label: 'Riwayat', icon: History },
   ];
 
   return (
     <div className="flex flex-col h-screen bg-background text-textMain">
       <main className="flex-1 overflow-y-auto pb-20">
         <Routes>
-          <Route path="/" element={<CalculatorPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/calculator" element={<CalculatorPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/products/new" element={<ProductFormPage />} />
           <Route path="/products/:id" element={<ProductFormPage />} />
@@ -59,12 +61,9 @@ function App() {
       <nav className="fixed bottom-0 z-50 flex w-full items-center justify-around border-t border-border bg-surface px-2 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isMoreItem = ['/more', '/history', '/settings', '/master-data', '/import-csv', '/realtime-sync'].includes(location.pathname);
           const isActive = item.path === '/'
             ? location.pathname === '/'
-            : item.path === '/more'
-              ? isMoreItem
-              : location.pathname.startsWith(item.path);
+            : location.pathname.startsWith(item.path);
           return (
             <Link
               key={item.path}
