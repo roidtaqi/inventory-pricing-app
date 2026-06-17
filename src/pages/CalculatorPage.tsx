@@ -54,6 +54,8 @@ export default function CalculatorPage() {
   const [invoicePpnMode, setInvoicePpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [invoicePpnRateInput, setInvoicePpnRateInput] = useState('');
   const [invoiceMarginPercent, setInvoiceMarginPercent] = useState('');
+  const [invoiceManualPriceEnabled, setInvoiceManualPriceEnabled] = useState(false);
+  const [invoiceManualSellingPrice, setInvoiceManualSellingPrice] = useState('');
   const [ppnMode, setPpnMode] = useState<PpnMode>(PpnMode.NO_PPN);
   const [ppnRateInput, setPpnRateInput] = useState('');
   const [marginOverride, setMarginOverride] = useState('');
@@ -94,6 +96,14 @@ export default function CalculatorPage() {
     }
 
     try {
+      const manualSellingPrice = invoiceManualPriceEnabled && invoiceManualSellingPrice
+        ? parseMoneyInput(invoiceManualSellingPrice)
+        : undefined;
+
+      if (manualSellingPrice !== undefined && (!Number.isFinite(manualSellingPrice) || manualSellingPrice <= 0)) {
+        throw new Error('Harga manual harus lebih dari 0.');
+      }
+
       return {
         result: InvoiceLineCalculatorService.calculate({
           cartonQuantity: parseNumberInput(invoiceCartonQuantity),
@@ -103,6 +113,7 @@ export default function CalculatorPage() {
           discountPercent: parseNumberInput(invoiceDiscountPercent),
           ppnMode: invoicePpnMode,
           ppnRate: invoicePpnRate,
+          sellingPrice: manualSellingPrice,
         }),
         error: null,
       };
@@ -120,6 +131,8 @@ export default function CalculatorPage() {
     invoicePiecesPerCarton,
     invoicePpnMode,
     invoicePpnRate,
+    invoiceManualPriceEnabled,
+    invoiceManualSellingPrice,
   ]);
 
   const activeMarginRules = useMemo(() => {
@@ -317,6 +330,8 @@ export default function CalculatorPage() {
     setInvoicePpnMode(PpnMode.NO_PPN);
     setInvoicePpnRateInput('');
     setInvoiceMarginPercent('');
+    setInvoiceManualPriceEnabled(false);
+    setInvoiceManualSellingPrice('');
   };
 
   const handleSaveCalculation = async (status: PriceCalculation['status']) => {
@@ -507,6 +522,35 @@ export default function CalculatorPage() {
               />
             </div>
 
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-gray-50 p-3">
+              <span className="text-sm font-medium text-textMain">Bandingkan Harga Manual</span>
+              <input
+                type="checkbox"
+                checked={invoiceManualPriceEnabled}
+                onChange={event => {
+                  setInvoiceManualPriceEnabled(event.target.checked);
+                  if (!event.target.checked) {
+                    setInvoiceManualSellingPrice('');
+                  }
+                }}
+                className="h-4 w-4 text-primary"
+              />
+            </label>
+
+            {invoiceManualPriceEnabled && (
+              <div className="rounded-lg border border-border p-3">
+                <label className="block text-sm font-medium mb-1">Harga Manual per Pcs</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="input"
+                  value={invoiceManualSellingPrice}
+                  onChange={event => setInvoiceManualSellingPrice(event.target.value)}
+                  placeholder="Contoh: 15000"
+                />
+              </div>
+            )}
+
             <button type="button" onClick={resetInvoiceCalculator} className="btn-secondary w-full py-2">
               Reset
             </button>
@@ -583,6 +627,29 @@ export default function CalculatorPage() {
                       <span className="font-medium">{formatNumber(invoiceMarginResult.actualMargin)}%</span>
                     </div>
                   </>
+                )}
+                {invoiceManualPriceEnabled && invoiceResult.sellingPrice !== undefined && (
+                  <div className="mt-3 space-y-2 border-t border-indigo-200 pt-3">
+                    <div className="text-xs font-bold text-indigo-700">Harga Manual</div>
+                    <div className="flex justify-between">
+                      <span>Harga Manual per Pcs:</span>
+                      <span className="font-medium">{formatCurrency(invoiceResult.sellingPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Profit Manual per Pcs:</span>
+                      <span className="font-medium text-emerald-600">{formatCurrency(invoiceResult.profitPerUnit ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Margin Manual Aktual:</span>
+                      <span className="font-medium">{formatNumber(invoiceResult.actualMargin ?? 0)}%</span>
+                    </div>
+                    {invoiceMarginResult && (
+                      <div className="flex justify-between">
+                        <span>Selisih dari Harga Margin:</span>
+                        <span className="font-medium">{formatCurrency(invoiceResult.sellingPrice - invoiceMarginResult.roundedPrice)}</span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
