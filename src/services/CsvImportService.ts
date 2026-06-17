@@ -138,6 +138,10 @@ export class CsvImportService {
       });
     });
 
+    if (validRows > 0 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('inventory-catalog-changed'));
+    }
+
     return {
       batchId,
       totalRows: records.length,

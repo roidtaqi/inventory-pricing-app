@@ -55,6 +55,10 @@ export class ApprovalService {
       await ApprovalService.activateCalculation(calculation, approvedBy, approvedAt);
     });
 
+    if (resolvedStatus === 'ACTIVE') {
+      ApprovalService.dispatchCatalogChanged();
+    }
+
     return resolvedStatus;
   }
 
@@ -94,6 +98,10 @@ export class ApprovalService {
         );
         activated += 1;
       });
+    }
+
+    if (activated > 0) {
+      ApprovalService.dispatchCatalogChanged();
     }
 
     return activated;
@@ -167,5 +175,11 @@ export class ApprovalService {
 
     const [year, month, day] = value.split('-').map(Number);
     return new Date(year, (month || 1) - 1, day || 1).getTime();
+  }
+
+  private static dispatchCatalogChanged(): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('inventory-catalog-changed'));
+    }
   }
 }

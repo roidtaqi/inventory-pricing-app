@@ -5,6 +5,7 @@ import { db, type Product, type ProductUnit } from '../db/db';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
 import { formatCurrency } from '../utils/format';
+import { useAppAlert } from '../components/AppAlertContext';
 
 type ProductFormTab = 'info' | 'units' | 'costHistory';
 
@@ -12,6 +13,7 @@ export default function ProductFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { showAlert } = useAppAlert();
 
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const brands = useLiveQuery(() => db.brands.toArray()) || [];
@@ -84,28 +86,28 @@ export default function ProductFormPage() {
     const trimmedBarcode = barcode.trim();
 
     if (!trimmedName || !trimmedSku) {
-      alert("Nama dan SKU wajib diisi");
+      showAlert({ tone: 'warning', title: 'Periksa Produk', message: 'Nama dan SKU wajib diisi.' });
       return;
     }
     if (units.length === 0) {
-      alert("Minimal harus memiliki satu satuan");
+      showAlert({ tone: 'warning', title: 'Periksa Produk', message: 'Minimal harus memiliki satu satuan.' });
       return;
     }
     for (const unit of units) {
       if (!unit.unitName?.trim()) {
-        alert("Nama satuan wajib diisi");
+        showAlert({ tone: 'warning', title: 'Periksa Satuan', message: 'Nama satuan wajib diisi.' });
         return;
       }
       if (!unit.conversionToBase || unit.conversionToBase <= 0) {
-        alert("Konversi satuan harus lebih dari 0");
+        showAlert({ tone: 'warning', title: 'Periksa Satuan', message: 'Konversi satuan harus lebih dari 0.' });
         return;
       }
       if (!unit.manualCost || unit.manualCost <= 0) {
-        alert("Harga modal manual harus lebih dari 0");
+        showAlert({ tone: 'warning', title: 'Periksa Satuan', message: 'Harga modal manual harus lebih dari 0.' });
         return;
       }
       if (!unit.activeSellingPrice || unit.activeSellingPrice <= 0) {
-        alert("Harga jual aktif harus lebih dari 0");
+        showAlert({ tone: 'warning', title: 'Periksa Satuan', message: 'Harga jual aktif harus lebih dari 0.' });
         return;
       }
       if (
@@ -113,7 +115,7 @@ export default function ProductFormPage() {
         unit.maxSellingPrice !== undefined &&
         unit.minSellingPrice > unit.maxSellingPrice
       ) {
-        alert("Harga minimum tidak boleh lebih besar dari harga maksimum");
+        showAlert({ tone: 'warning', title: 'Periksa Satuan', message: 'Harga minimum tidak boleh lebih besar dari harga maksimum.' });
         return;
       }
     }
@@ -121,7 +123,7 @@ export default function ProductFormPage() {
     try {
       const existingSku = await db.products.where('sku').equals(trimmedSku).first();
       if (existingSku && existingSku.id !== productId) {
-        alert("SKU sudah digunakan produk lain");
+        showAlert({ tone: 'warning', title: 'SKU Duplikat', message: 'SKU sudah digunakan produk lain.' });
         return;
       }
 
@@ -130,7 +132,7 @@ export default function ProductFormPage() {
           .filter(product => product.barcode === trimmedBarcode && product.id !== productId)
           .first();
         if (duplicateBarcode) {
-          alert("Barcode sudah digunakan produk lain");
+          showAlert({ tone: 'warning', title: 'Barcode Duplikat', message: 'Barcode sudah digunakan produk lain.' });
           return;
         }
       }
@@ -198,10 +200,11 @@ export default function ProductFormPage() {
           }
         }
       });
+      window.dispatchEvent(new CustomEvent('inventory-catalog-changed'));
       navigate('/products');
     } catch (error) {
       console.error(error);
-      alert("Gagal menyimpan produk");
+      showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Produk belum berhasil disimpan. Coba periksa input dan ulangi lagi.' });
     }
   };
 

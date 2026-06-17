@@ -8,6 +8,7 @@ import { ApprovalService } from '../services/ApprovalService';
 import { UnitCostAllocationService } from '../services/UnitCostAllocationService';
 import { InvoiceLineCalculatorService, type InvoiceLineResult } from '../services/InvoiceLineCalculatorService';
 import { formatCurrency, formatNumber } from '../utils/format';
+import { useAppAlert } from '../components/AppAlertContext';
 
 const toDateInput = (date: Date): string => {
   const year = date.getFullYear();
@@ -38,6 +39,7 @@ const parseMoneyInput = (value: string): number => {
 };
 
 export default function CalculatorPage() {
+  const { showAlert } = useAppAlert();
   const [calculatorMode, setCalculatorMode] = useState<CalculatorMode>('INVOICE');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedUnitId, setSelectedUnitId] = useState('');
@@ -336,15 +338,15 @@ export default function CalculatorPage() {
 
   const handleSaveCalculation = async (status: PriceCalculation['status']) => {
     if (!selectedProductId || !selectedUnitId) {
-      alert('Pilih produk dan satuan terlebih dahulu');
+      showAlert({ tone: 'warning', title: 'Periksa Kalkulator', message: 'Pilih produk dan satuan terlebih dahulu.' });
       return;
     }
     if (!taxResult || !pricingResult) {
-      alert('Input tidak valid');
+      showAlert({ tone: 'warning', title: 'Input Tidak Valid', message: 'Input kalkulasi belum valid. Periksa kembali modal, PPN, dan margin.' });
       return;
     }
     if (pricingModePolicy?.requiresConfirmation && !lockedConfirmed) {
-      alert('Konfirmasi harga terkunci sebelum membuat draft perubahan harga.');
+      showAlert({ tone: 'warning', title: 'Konfirmasi Diperlukan', message: 'Konfirmasi harga terkunci sebelum membuat draft perubahan harga.' });
       return;
     }
     if (status === 'WAITING_APPROVAL') {
@@ -353,7 +355,7 @@ export default function CalculatorPage() {
         recommendedPrice: pricingResult.recommendedPrice,
       });
       if (approvalError) {
-        alert(approvalError);
+        showAlert({ tone: 'warning', title: 'Tidak Bisa Approval', message: approvalError });
         return;
       }
     }
@@ -386,11 +388,11 @@ export default function CalculatorPage() {
         updatedAt: now,
       });
 
-      alert(`Berhasil menyimpan sebagai ${status.replace('_', ' ')}`);
+      showAlert({ tone: 'success', title: 'Kalkulasi Tersimpan', message: `Berhasil menyimpan sebagai ${status.replace('_', ' ')}.` });
       resetForm();
     } catch (error) {
       console.error(error);
-      alert('Gagal menyimpan');
+      showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Kalkulasi harga belum berhasil disimpan. Coba ulangi lagi.' });
     }
   };
 

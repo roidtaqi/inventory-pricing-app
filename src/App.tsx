@@ -15,12 +15,16 @@ import SettingsPage from './pages/SettingsPage';
 import MasterDataPage from './pages/MasterDataPage';
 import MorePage from './pages/MorePage';
 import ImportCsvPage from './pages/ImportCsvPage';
+import RealtimeSyncPage from './pages/RealtimeSyncPage';
+import { realtimeSyncService } from './services/RealtimeSyncService';
 
 function App() {
   const location = useLocation();
 
   useEffect(() => {
-    seedDatabase().catch(console.error);
+    seedDatabase()
+      .then(() => realtimeSyncService.autoStart())
+      .catch(console.error);
   }, []);
 
   const navItems = [
@@ -48,13 +52,14 @@ function App() {
           <Route path="/master-data" element={<MasterDataPage />} />
           <Route path="/more" element={<MorePage />} />
           <Route path="/import-csv" element={<ImportCsvPage />} />
+          <Route path="/realtime-sync" element={<RealtimeSyncPage />} />
         </Routes>
       </main>
 
       <nav className="fixed bottom-0 z-50 flex w-full items-center justify-around border-t border-border bg-surface px-2 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isMoreItem = ['/more', '/history', '/settings', '/master-data', '/import-csv'].includes(location.pathname);
+          const isMoreItem = ['/more', '/history', '/settings', '/master-data', '/import-csv', '/realtime-sync'].includes(location.pathname);
           const isActive = item.path === '/'
             ? location.pathname === '/'
             : item.path === '/more'

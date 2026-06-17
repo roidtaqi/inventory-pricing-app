@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Database, Download, Save } from 'lucide-react';
 import { db } from '../db/db';
+import { useAppAlert } from '../components/AppAlertContext';
 
 export default function SettingsPage() {
+  const { showAlert } = useAppAlert();
   const appSettings = useLiveQuery(() => db.appSettings.toArray());
   const defaultRule = useLiveQuery(() => db.marginRules.where('ruleType').equals('STORE_DEFAULT').first());
 
@@ -25,15 +27,15 @@ export default function SettingsPage() {
     const parsedMargin = Number(defaultMargin);
 
     if (!appName.trim()) {
-      alert('Nama aplikasi wajib diisi');
+      showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Nama aplikasi wajib diisi.' });
       return;
     }
     if (!Number.isFinite(parsedPpnRate) || parsedPpnRate < 0) {
-      alert('Default PPN tidak boleh negatif');
+      showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Default PPN tidak boleh negatif.' });
       return;
     }
     if (!Number.isFinite(parsedMargin) || parsedMargin <= 0 || parsedMargin >= 100) {
-      alert('Default margin harus lebih dari 0 dan kurang dari 100%');
+      showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Default margin harus lebih dari 0 dan kurang dari 100%.' });
       return;
     }
 
@@ -56,10 +58,10 @@ export default function SettingsPage() {
           effectiveUntil: defaultRule?.effectiveUntil,
         });
       });
-      alert('Settings tersimpan');
+      showAlert({ tone: 'success', title: 'Settings Tersimpan', message: 'Pengaturan aplikasi berhasil disimpan.' });
     } catch (error) {
       console.error(error);
-      alert('Gagal menyimpan settings');
+      showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Settings belum berhasil disimpan. Coba ulangi lagi.' });
     }
   };
 

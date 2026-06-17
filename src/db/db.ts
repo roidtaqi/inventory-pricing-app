@@ -161,6 +161,28 @@ export interface AppSetting {
   value: string;
 }
 
+export interface PosSale {
+  id: string;
+  transactionId: string;
+  cashierId: string;
+  outletId: string;
+  createdAt: string;
+  total: number;
+  paid: number;
+  change: number;
+  payload: string;
+  receivedAt: number;
+}
+
+export interface RealtimeSyncLog {
+  id: string;
+  direction: 'IN' | 'OUT';
+  eventType: string;
+  status: 'SUCCESS' | 'FAILED';
+  message: string;
+  createdAt: number;
+}
+
 export class InventoryPricingDatabase extends Dexie {
   categories!: Table<Category, number>;
   brands!: Table<Brand, number>;
@@ -174,6 +196,8 @@ export class InventoryPricingDatabase extends Dexie {
   csvImportBatches!: Table<CsvImportBatch, string>;
   csvImportRows!: Table<CsvImportRow, string>;
   appSettings!: Table<AppSetting, string>;
+  posSales!: Table<PosSale, string>;
+  realtimeSyncLogs!: Table<RealtimeSyncLog, string>;
 
   constructor() {
     super('InventoryPricingDatabase');
@@ -212,6 +236,22 @@ export class InventoryPricingDatabase extends Dexie {
       csvImportBatches: 'id, importType, status, createdAt',
       csvImportRows: 'id, batchId, rowNumber, status, createdAt',
       appSettings: 'key'
+    });
+    this.version(4).stores({
+      categories: '++id, name, isActive',
+      brands: '++id, name, isActive',
+      suppliers: '++id, name, isActive',
+      products: 'id, sku, name, categoryId, brandId, supplierId, barcode, pricingMode, isActive',
+      productUnits: 'id, productId, unitName',
+      marginRules: 'id, ruleType, referenceId, isActive',
+      priceCalculations: 'id, productId, productUnitId, status, effectiveDate, createdAt',
+      priceHistories: 'id, productId, productUnitId, effectiveDate, createdAt',
+      productUnitCostHistories: 'id, productId, productUnitId, supplierId, source, effectiveDate, importBatchId, createdAt',
+      csvImportBatches: 'id, importType, status, createdAt',
+      csvImportRows: 'id, batchId, rowNumber, status, createdAt',
+      appSettings: 'key',
+      posSales: 'id, transactionId, outletId, cashierId, createdAt, receivedAt',
+      realtimeSyncLogs: 'id, direction, eventType, status, createdAt'
     });
   }
 }

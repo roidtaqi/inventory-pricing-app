@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type MarginRule } from '../db/db';
 import { ArrowLeft, Save } from 'lucide-react';
+import { useAppAlert } from '../components/AppAlertContext';
 
 const findExistingMarginRule = (
   rules: MarginRule[],
@@ -27,6 +28,7 @@ export default function MarginRuleFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { showAlert } = useAppAlert();
 
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const brands = useLiveQuery(() => db.brands.toArray()) || [];
@@ -113,19 +115,19 @@ export default function MarginRuleFormPage() {
   const handleSave = async () => {
     const parsedMargin = parseFloat(marginPercent);
     if (!marginPercent || !Number.isFinite(parsedMargin)) {
-      alert("Margin wajib diisi");
+      showAlert({ tone: 'warning', title: 'Periksa Margin', message: 'Margin wajib diisi.' });
       return;
     }
     if (parsedMargin <= 0 || parsedMargin >= 100) {
-      alert("Margin harus lebih dari 0 dan kurang dari 100%");
+      showAlert({ tone: 'warning', title: 'Periksa Margin', message: 'Margin harus lebih dari 0 dan kurang dari 100%.' });
       return;
     }
     if (ruleType !== 'STORE_DEFAULT' && !referenceId) {
-        alert("Referensi target wajib dipilih");
+        showAlert({ tone: 'warning', title: 'Periksa Target', message: 'Referensi target wajib dipilih.' });
         return;
     }
     if (effectiveFrom && effectiveUntil && effectiveFrom > effectiveUntil) {
-      alert("Tanggal mulai tidak boleh lebih akhir dari tanggal akhir");
+      showAlert({ tone: 'warning', title: 'Periksa Tanggal', message: 'Tanggal mulai tidak boleh lebih akhir dari tanggal akhir.' });
       return;
     }
 
@@ -144,7 +146,7 @@ export default function MarginRuleFormPage() {
       navigate('/margin');
     } catch (error) {
       console.error(error);
-      alert("Gagal menyimpan aturan margin");
+      showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Aturan margin belum berhasil disimpan. Coba ulangi lagi.' });
     }
   };
 

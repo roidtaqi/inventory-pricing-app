@@ -1,11 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type PriceCalculation } from '../db/db';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { CalendarClock, Check, X } from 'lucide-react';
 import { ApprovalService } from '../services/ApprovalService';
 import { formatCurrency, formatNumber } from '../utils/format';
+import { useAppAlert } from '../components/AppAlertContext';
 
 export default function ApprovalPage() {
+  const { showAlert } = useAppAlert();
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
   const pendingCalculations = useLiveQuery(() => 
     db.priceCalculations.where('status').equals('WAITING_APPROVAL').toArray()
   ) || [];
@@ -23,20 +28,37 @@ export default function ApprovalPage() {
   const handleApprove = async (calc: PriceCalculation) => {
     try {
       const status = await ApprovalService.approveCalculation(calc.id!);
-      alert(status === 'ACTIVE' ? 'Harga disetujui dan diaktifkan.' : 'Harga disetujui dan dijadwalkan.');
+      showAlert({
+        tone: 'success',
+        title: 'Approval Berhasil',
+        message: status === 'ACTIVE' ? 'Harga disetujui dan diaktifkan.' : 'Harga disetujui dan dijadwalkan.',
+      });
     } catch (e) {
       console.error(e);
-      alert('Gagal menyetujui harga');
+      showAlert({ tone: 'error', title: 'Gagal Approval', message: 'Harga belum berhasil disetujui. Coba ulangi lagi.' });
     }
   };
 
   const handleReject = async (id: string) => {
+    setRejectTargetId(id);
+    setRejectionReason('');
+  };
+
+  const closeRejectModal = () => {
+    setRejectTargetId(null);
+    setRejectionReason('');
+  };
+
+  const submitReject = async () => {
+    if (!rejectTargetId) return;
+
     try {
-      const reason = window.prompt('Alasan penolakan (opsional)') ?? undefined;
-      await ApprovalService.rejectCalculation(id, 'Owner Lokal', reason);
+      await ApprovalService.rejectCalculation(rejectTargetId, 'Owner Lokal', rejectionReason.trim() || undefined);
+      closeRejectModal();
+      showAlert({ tone: 'success', title: 'Harga Ditolak', message: 'Draft perubahan harga berhasil ditolak.' });
     } catch (e) {
       console.error(e);
-      alert('Gagal menolak harga');
+      showAlert({ tone: 'error', title: 'Gagal Menolak', message: 'Draft perubahan harga belum berhasil ditolak. Coba ulangi lagi.' });
     }
   };
 
@@ -120,30 +142,57 @@ export default function ApprovalPage() {
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4 text-primary">Approval Harga</h1>
-      
-      <div className="space-y-4">
-        {pendingCalculations.map(calc => renderCalculationCard(calc))}
+    <>
+      <div className="p-4 max-w-md mx-auto">
+        <h1 className="text-2xl font-bold mb-4 text-primary">Approval Harga</h1>
         
-        {pendingCalculations.length === 0 && scheduledCalculations.length === 0 && (
-          <div className="card text-center text-textMuted py-8">
-            Belum ada harga yang menunggu approval
-          </div>
-        )}
+        <div className="space-y-4">
+          {pendingCalculations.map(calc => renderCalculationCard(calc))}
+          
+          {pendingCalculations.length === 0 && scheduledCalculations.length === 0 && (
+            <div className="card text-center text-textMuted py-8">
+              Belum ada harga yang menunggu approval
+            </div>
+          )}
 
-        {scheduledCalculations.length > 0 && (
-          <div className="pt-2">
-            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-textMain">
-              <CalendarClock className="h-4 w-4 text-primary" />
-              Harga Terjadwal
+          {scheduledCalculations.length > 0 && (
+            <div className="pt-2">
+              <div className="mb-2 flex items-center gap-2 text-sm font-bold text-textMain">
+                <CalendarClock className="h-4 w-4 text-primary" />
+                Harga Terjadwal
+              </div>
+              <div className="space-y-4">
+                {scheduledCalculations.map(calc => renderCalculationCard(calc, true))}
+              </div>
             </div>
-            <div className="space-y-4">
-              {scheduledCalculations.map(calc => renderCalculationCard(calc, true))}
+          )}
+        </div>
+      </div>
+
+      {rejectTargetId && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 px-4 py-6 sm:items-center">
+          <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-lg bg-surface p-4 shadow-xl">
+            <h2 className="text-lg font-bold text-textMain">Tolak Harga</h2>
+            <label className="mt-3 block text-sm font-medium text-textMain">
+              Alasan Penolakan
+              <textarea
+                className="input mt-1 min-h-24 resize-none"
+                value={rejectionReason}
+                onChange={event => setRejectionReason(event.target.value)}
+                placeholder="Opsional"
+              />
+            </label>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={closeRejectModal} className="btn-secondary py-2">
+                Batal
+              </button>
+              <button type="button" onClick={submitReject} className="rounded-md bg-danger px-4 py-2 text-sm font-semibold text-white">
+                Tolak
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

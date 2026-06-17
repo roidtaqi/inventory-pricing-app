@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Check, Pencil, Plus, Search, X } from 'lucide-react';
 import clsx from 'clsx';
 import { db, type Brand, type Category, type Supplier } from '../db/db';
+import { useAppAlert } from '../components/AppAlertContext';
 
 type MasterTab = 'categories' | 'brands' | 'suppliers';
 type MasterItem = Category | Brand | Supplier;
@@ -19,6 +20,7 @@ const tabs: Array<{ id: MasterTab; label: string }> = [
 ];
 
 export default function MasterDataPage() {
+  const { showAlert } = useAppAlert();
   const [activeTab, setActiveTab] = useState<MasterTab>('categories');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [nameInput, setNameInput] = useState('');
@@ -83,11 +85,11 @@ export default function MasterDataPage() {
   const handleSave = async () => {
     const name = nameInput.trim();
     if (!name) {
-      alert('Nama wajib diisi');
+      showAlert({ tone: 'warning', title: 'Periksa Master Data', message: 'Nama wajib diisi.' });
       return;
     }
     if (hasDuplicateName(name)) {
-      alert('Nama sudah ada');
+      showAlert({ tone: 'warning', title: 'Data Duplikat', message: 'Nama sudah ada.' });
       return;
     }
 
@@ -113,7 +115,7 @@ export default function MasterDataPage() {
       resetForm();
     } catch (error) {
       console.error(error);
-      alert('Gagal menyimpan master data');
+      showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Master data belum berhasil disimpan. Coba ulangi lagi.' });
     }
   };
 

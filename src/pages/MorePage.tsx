@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, Database, FileSpreadsheet, History, Settings } from 'lucide-react';
+import { ChevronRight, Database, FileSpreadsheet, History, RefreshCw, Settings } from 'lucide-react';
 
 const menuItems = [
   {
@@ -19,6 +19,12 @@ const menuItems = [
     title: 'Import CSV',
     description: 'Produk, satuan, dan modal',
     icon: FileSpreadsheet,
+  },
+  {
+    to: '/realtime-sync',
+    title: 'Real-time Sync',
+    description: 'Kirim harga aktif dan terima sales POS',
+    icon: RefreshCw,
   },
   {
     to: '/settings',

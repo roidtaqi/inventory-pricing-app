@@ -19,6 +19,40 @@ npm install
 npm run dev
 ```
 
+## Real-time Sync ke Integrated POS App
+
+Aplikasi ini bisa mengirim catalog/harga aktif secara real-time ke Integrated POS App dan menerima sales event dari POS melalui sync server WebSocket yang tersedia di repo POS.
+
+Jalankan sync server dari repo POS:
+
+```bash
+cd ../integrated-pos-app
+npm run sync:server
+```
+
+Lalu jalankan Inventory Pricing App:
+
+```bash
+cd ../inventory-pricing-app
+npm run dev
+```
+
+Alur:
+
+1. Buka `Lainnya -> Real-time Sync`.
+2. Isi URL `ws://localhost:8787`.
+3. Aktifkan real-time sync.
+4. Klik `Simpan & Connect`.
+5. Klik `Publish Catalog Sekarang` untuk mengirim produk, satuan, dan harga aktif ke POS.
+6. Transaksi POS yang masuk akan tersimpan di tabel lokal `posSales` dan tampil di halaman Real-time Sync.
+
+Catatan arsitektur:
+
+- Inventory Pricing App tetap source of truth untuk produk, satuan, dan harga aktif.
+- POS tetap sales execution layer.
+- Sync server lokal menyimpan event di `.sync-data/realtime-sync-state.json` pada repo POS.
+- Untuk production, WebSocket server ini perlu diberi auth, tenant/outlet scoping, retry policy, dan conflict resolution.
+
 Build production:
 
 ```bash
