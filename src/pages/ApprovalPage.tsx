@@ -10,6 +10,7 @@ export default function ApprovalPage() {
   const { showAlert } = useAppAlert();
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'SCHEDULED' | 'HISTORY'>('PENDING');
 
   const pendingCalculations = useLiveQuery(() => 
     db.priceCalculations.where('status').equals('WAITING_APPROVAL').toArray()
@@ -17,6 +18,12 @@ export default function ApprovalPage() {
   const scheduledCalculations = useLiveQuery(() =>
     db.priceCalculations.where('status').equals('SCHEDULED').toArray()
   ) || [];
+  const approvalHistory = useLiveQuery(async () => {
+    const calculations = await db.priceCalculations.toArray();
+    return calculations
+      .filter(calc => ['ACTIVE', 'APPROVED', 'REJECTED', 'EXPIRED'].includes(calc.status))
+      .sort((a, b) => (b.updatedAt ?? b.approvedAt ?? b.rejectedAt ?? b.createdAt) - (a.updatedAt ?? a.approvedAt ?? a.rejectedAt ?? a.createdAt));
+  }) || [];
 
   const products = useLiveQuery(() => db.products.toArray()) || [];
   const units = useLiveQuery(() => db.productUnits.toArray()) || [];
@@ -62,6 +69,35 @@ export default function ApprovalPage() {
     }
   };
 
+  const getStatusLabel = (calc: PriceCalculation, isScheduled = false) => {
+    if (isScheduled) return 'Terjadwal';
+    if (calc.status === 'WAITING_APPROVAL') return 'Menunggu';
+    if (calc.status === 'ACTIVE') return 'Disetujui';
+    if (calc.status === 'APPROVED') return 'Disetujui';
+    if (calc.status === 'REJECTED') return 'Ditolak';
+    if (calc.status === 'EXPIRED') return 'Expired';
+    return calc.status.replace('_', ' ');
+  };
+
+  const getStatusClassName = (calc: PriceCalculation, isScheduled = false) => {
+    if (isScheduled || calc.status === 'SCHEDULED') return 'bg-blue-100 text-blue-700';
+    if (calc.status === 'WAITING_APPROVAL') return 'bg-amber-100 text-amber-700';
+    if (calc.status === 'REJECTED') return 'bg-red-100 text-red-700';
+    if (calc.status === 'EXPIRED') return 'bg-gray-100 text-gray-700';
+    return 'bg-emerald-100 text-emerald-700';
+  };
+
+  const formatTimestamp = (value?: number) => {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const renderCalculationCard = (calc: PriceCalculation, isScheduled = false) => {
     const product = products.find(p => p.id === calc.productId);
     const unit = units.find(u => u.id === calc.productUnitId);
@@ -76,8 +112,8 @@ export default function ApprovalPage() {
             <div className="font-bold text-textMain">{product?.name || 'Unknown Product'}</div>
             <div className="text-sm text-textMuted">{unit?.unitName || 'Unknown Unit'}</div>
           </div>
-          <div className={isScheduled ? 'bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-bold' : 'bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded font-bold'}>
-            {isScheduled ? 'Scheduled' : 'Menunggu'}
+          <div className={`${getStatusClassName(calc, isScheduled)} text-xs px-2 py-1 rounded font-bold`}>
+            {getStatusLabel(calc, isScheduled)}
           </div>
         </div>
 
@@ -122,10 +158,41 @@ export default function ApprovalPage() {
           </div>
         )}
 
+        {calc.status === 'REJECTED' && calc.rejectionReason && (
+          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {calc.rejectionReason}
+          </div>
+        )}
+
         <div className="flex justify-between text-xs text-textMuted">
           <span>Dibuat oleh {calc.createdBy ?? 'Admin Lokal'}</span>
           <span>Margin rule {calc.marginPercent}%</span>
         </div>
+
+        {calc.status !== 'WAITING_APPROVAL' && (
+          <div className="grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-textMuted">
+            <div>
+              <span className="block font-semibold text-textMain">Approved by</span>
+              <span>{calc.approvedBy ?? '-'}</span>
+            </div>
+            <div>
+              <span className="block font-semibold text-textMain">Approved at</span>
+              <span>{formatTimestamp(calc.approvedAt)}</span>
+            </div>
+            {calc.status === 'REJECTED' && (
+              <>
+                <div>
+                  <span className="block font-semibold text-textMain">Rejected by</span>
+                  <span>{calc.rejectedBy ?? '-'}</span>
+                </div>
+                <div>
+                  <span className="block font-semibold text-textMain">Rejected at</span>
+                  <span>{formatTimestamp(calc.rejectedAt)}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {!isScheduled && (
           <div className="flex gap-2 pt-2 border-t border-border">
@@ -145,25 +212,60 @@ export default function ApprovalPage() {
     <>
       <div className="p-4 max-w-md mx-auto">
         <h1 className="text-2xl font-bold mb-4 text-primary">Approval Harga</h1>
+
+        <div className="mb-4 grid grid-cols-3 rounded-lg border border-border bg-surface p-1 text-xs font-bold">
+          {[
+            { id: 'PENDING', label: 'Menunggu', count: pendingCalculations.length },
+            { id: 'SCHEDULED', label: 'Terjadwal', count: scheduledCalculations.length },
+            { id: 'HISTORY', label: 'Riwayat', count: approvalHistory.length },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={`rounded-md px-2 py-2 transition-colors ${activeTab === tab.id ? 'bg-primary text-white shadow-sm' : 'text-textMuted hover:text-primary'}`}
+            >
+              {tab.label} {tab.count > 0 ? `(${tab.count})` : ''}
+            </button>
+          ))}
+        </div>
         
         <div className="space-y-4">
-          {pendingCalculations.map(calc => renderCalculationCard(calc))}
-          
-          {pendingCalculations.length === 0 && scheduledCalculations.length === 0 && (
+          {activeTab === 'PENDING' && pendingCalculations.map(calc => renderCalculationCard(calc))}
+
+          {activeTab === 'PENDING' && pendingCalculations.length === 0 && (
             <div className="card text-center text-textMuted py-8">
               Belum ada harga yang menunggu approval
             </div>
           )}
 
-          {scheduledCalculations.length > 0 && (
-            <div className="pt-2">
-              <div className="mb-2 flex items-center gap-2 text-sm font-bold text-textMain">
-                <CalendarClock className="h-4 w-4 text-primary" />
-                Harga Terjadwal
-              </div>
+          {activeTab === 'SCHEDULED' && (
+            <div>
+              {scheduledCalculations.length > 0 && (
+                <div className="mb-2 flex items-center gap-2 text-sm font-bold text-textMain">
+                  <CalendarClock className="h-4 w-4 text-primary" />
+                  Harga Terjadwal
+                </div>
+              )}
               <div className="space-y-4">
                 {scheduledCalculations.map(calc => renderCalculationCard(calc, true))}
               </div>
+              {scheduledCalculations.length === 0 && (
+                <div className="card text-center text-textMuted py-8">
+                  Belum ada harga terjadwal
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'HISTORY' && (
+            <div className="space-y-4">
+              {approvalHistory.map(calc => renderCalculationCard(calc))}
+              {approvalHistory.length === 0 && (
+                <div className="card text-center text-textMuted py-8">
+                  Belum ada riwayat approval
+                </div>
+              )}
             </div>
           )}
         </div>
