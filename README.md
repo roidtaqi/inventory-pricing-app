@@ -76,6 +76,40 @@ Preview web untuk client:
 
 Build ini sudah menyertakan fallback SPA (`_redirects` dan `vercel.json`) agar refresh/deep link seperti `/products`, `/approval`, dan `/history` tetap membuka aplikasi.
 
+## Deploy Gratis ke Render
+
+Untuk deploy bersamaan dengan Integrated POS App, gunakan Blueprint dari repo POS:
+
+```txt
+https://github.com/roidtaqi/integrated-pos-app
+```
+
+Blueprint tersebut akan membuat tiga service:
+
+- `inventory-pricing-app` sebagai Render Static Site.
+- `integrated-pos-app` sebagai Render Static Site.
+- `integrated-pos-sync-server` sebagai Render Free Web Service untuk WebSocket sync.
+
+Setelah deploy selesai, buka service `integrated-pos-sync-server`, salin URL Render-nya, lalu ubah dari:
+
+```txt
+https://integrated-pos-sync-server.onrender.com
+```
+
+menjadi:
+
+```txt
+wss://integrated-pos-sync-server.onrender.com
+```
+
+Gunakan URL `wss://...` itu di `Home -> Data & Pengaturan -> Sync`.
+
+Catatan Render Free:
+
+- Sync server bisa sleep setelah tidak aktif, lalu butuh waktu untuk bangun kembali.
+- Data sync server disimpan di filesystem service gratis, jadi cocok untuk demo/preview, bukan production final.
+- Jika WebSocket belum connect, buka dulu `/health` dari URL sync server untuk membangunkan service.
+
 ## Deploy ke Railway
 
 Railway bisa dipakai untuk preview web. Repo ini sudah menyediakan `Dockerfile` dan `Caddyfile`, sehingga Railway akan build React/Vite lalu serve folder `dist/` memakai Caddy.
