@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Product, type ProductUnit } from '../db/db';
-import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Camera, Plus, Save, ScanLine, Trash2 } from 'lucide-react';
 import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
 import { formatCurrency } from '../utils/format';
 import { useAppAlert } from '../components/AppAlertContext';
 
 type ProductFormTab = 'info' | 'units' | 'costHistory';
+
+const CameraBarcodeScanner = lazy(() =>
+  import('../components/CameraBarcodeScanner').then(module => ({ default: module.CameraBarcodeScanner })),
+);
 
 export default function ProductFormPage() {
   const { id } = useParams();
@@ -32,10 +36,14 @@ export default function ProductFormPage() {
   const [pricingMode, setPricingMode] = useState<'AUTO_MARGIN' | 'MANUAL_PRICE' | 'LOCKED_PRICE'>('AUTO_MARGIN');
   const [isActive, setIsActive] = useState(true);
   const [notes, setNotes] = useState('');
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
   
   const [units, setUnits] = useState<Partial<ProductUnit>[]>([]);
   const [activeTab, setActiveTab] = useState<ProductFormTab>('info');
   const costHistories = (loadedCostHistories ?? []).sort((a, b) => b.createdAt - a.createdAt);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const scannerBufferRef = useRef('');
+  const lastScannerKeyAtRef = useRef(0);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -78,6 +86,61 @@ export default function ProductFormPage() {
     newUnits.splice(index, 1);
     setUnits(newUnits);
   };
+
+  const handleDetectedBarcode = useCallback(async (rawBarcode: string) => {
+    const scannedBarcode = rawBarcode.trim();
+    if (!scannedBarcode) return false;
+
+    const duplicateBarcode = await db.products
+      .filter(product => product.barcode === scannedBarcode && product.id !== id)
+      .first();
+    if (duplicateBarcode) {
+      showAlert({
+        tone: 'warning',
+        title: 'Barcode Sudah Ada',
+        message: `Barcode ini sudah digunakan oleh produk "${duplicateBarcode.name}".`,
+      });
+      return false;
+    }
+
+    setBarcode(scannedBarcode);
+    setActiveTab('info');
+    return true;
+  }, [id, showAlert]);
+
+  useEffect(() => {
+    const handleScannerKeyDown = (event: KeyboardEvent) => {
+      if (showCameraScanner) return;
+
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName;
+      const isEditable = target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+      if (isEditable) return;
+
+      const now = Date.now();
+      if (now - lastScannerKeyAtRef.current > 80) {
+        scannerBufferRef.current = '';
+      }
+
+      if (event.key === 'Enter') {
+        const scannedBarcode = scannerBufferRef.current.trim();
+        scannerBufferRef.current = '';
+        if (scannedBarcode.length >= 3) {
+          event.preventDefault();
+          void handleDetectedBarcode(scannedBarcode);
+        }
+        return;
+      }
+
+      if (event.key.length === 1) {
+        scannerBufferRef.current += event.key;
+        lastScannerKeyAtRef.current = now;
+      }
+    };
+
+    window.addEventListener('keydown', handleScannerKeyDown);
+    return () => window.removeEventListener('keydown', handleScannerKeyDown);
+  }, [handleDetectedBarcode, showCameraScanner]);
 
   const handleSave = async () => {
     const productId = id || crypto.randomUUID();
@@ -273,7 +336,34 @@ export default function ProductFormPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Barcode</label>
-                <input className="input" value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Opsional" />
+                <div className="flex gap-2">
+                  <input
+                    ref={barcodeInputRef}
+                    className="input"
+                    value={barcode}
+                    onChange={e => setBarcode(e.target.value)}
+                    placeholder="Opsional"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      barcodeInputRef.current?.focus();
+                      barcodeInputRef.current?.select();
+                    }}
+                    className="btn-secondary flex h-10 w-10 shrink-0 items-center justify-center p-0"
+                    title="Fokus barcode untuk scanner laser"
+                  >
+                    <ScanLine className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCameraScanner(true)}
+                    className="btn-secondary flex h-10 w-10 shrink-0 items-center justify-center p-0 text-primary"
+                    title="Scan barcode dengan kamera"
+                  >
+                    <Camera className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Mode Pricing</label>
@@ -414,6 +504,21 @@ export default function ProductFormPage() {
           </div>
         )}
       </div>
+
+      {showCameraScanner && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 p-4 text-sm font-bold text-white">
+              Membuka kamera...
+            </div>
+          }
+        >
+          <CameraBarcodeScanner
+            onClose={() => setShowCameraScanner(false)}
+            onDetected={handleDetectedBarcode}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
