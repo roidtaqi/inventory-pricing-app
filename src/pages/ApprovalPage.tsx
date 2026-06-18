@@ -1,8 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type PriceCalculation } from '../db/db';
-import { useEffect, useState } from 'react';
-import { CalendarClock, Check, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarClock, Check, ShieldCheck, X } from 'lucide-react';
 import { ApprovalService } from '../services/ApprovalService';
+import { SessionService } from '../services/SessionService';
 import { formatCurrency, formatNumber } from '../utils/format';
 import { useAppAlert } from '../components/AppAlertContext';
 
@@ -27,14 +28,23 @@ export default function ApprovalPage() {
 
   const products = useLiveQuery(() => db.products.toArray()) || [];
   const units = useLiveQuery(() => db.productUnits.toArray()) || [];
+  const appSettings = useLiveQuery(() => db.appSettings.toArray());
+  const session = useMemo(() => SessionService.fromSettings(appSettings), [appSettings]);
+  const canCurrentUserApprove = SessionService.canApprove(session.role);
+  const roleLabel = SessionService.roleLabel(session.role);
 
   useEffect(() => {
     ApprovalService.activateDueScheduledPrices().catch(console.error);
   }, []);
 
   const handleApprove = async (calc: PriceCalculation) => {
+    if (!canCurrentUserApprove) {
+      showAlert({ tone: 'warning', title: 'Akses Ditolak', message: 'Hanya Owner yang bisa menyetujui harga.' });
+      return;
+    }
+
     try {
-      const status = await ApprovalService.approveCalculation(calc.id!);
+      const status = await ApprovalService.approveCalculation(calc.id!, session.name, new Date(), session.role);
       showAlert({
         tone: 'success',
         title: 'Approval Berhasil',
@@ -47,6 +57,11 @@ export default function ApprovalPage() {
   };
 
   const handleReject = async (id: string) => {
+    if (!canCurrentUserApprove) {
+      showAlert({ tone: 'warning', title: 'Akses Ditolak', message: 'Hanya Owner yang bisa menolak harga.' });
+      return;
+    }
+
     setRejectTargetId(id);
     setRejectionReason('');
   };
@@ -60,7 +75,7 @@ export default function ApprovalPage() {
     if (!rejectTargetId) return;
 
     try {
-      await ApprovalService.rejectCalculation(rejectTargetId, 'Owner Lokal', rejectionReason.trim() || undefined);
+      await ApprovalService.rejectCalculation(rejectTargetId, session.name, rejectionReason.trim() || undefined, session.role);
       closeRejectModal();
       showAlert({ tone: 'success', title: 'Harga Ditolak', message: 'Draft perubahan harga berhasil ditolak.' });
     } catch (e) {
@@ -104,6 +119,7 @@ export default function ApprovalPage() {
     const effectiveDate = calc.effectiveDate
       ? new Date(`${calc.effectiveDate}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
       : '-';
+    const showApprovalActions = canCurrentUserApprove && calc.status === 'WAITING_APPROVAL' && !isScheduled;
 
     return (
       <div key={calc.id} className="card space-y-3">
@@ -194,7 +210,13 @@ export default function ApprovalPage() {
           </div>
         )}
 
-        {!isScheduled && (
+        {!showApprovalActions && calc.status === 'WAITING_APPROVAL' && (
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-medium text-textMuted">
+            Mode {roleLabel}: status bisa dilihat, approval hanya untuk Owner.
+          </div>
+        )}
+
+        {showApprovalActions && (
           <div className="flex gap-2 pt-2 border-t border-border">
             <button onClick={() => handleReject(calc.id!)} className="flex-1 flex justify-center items-center gap-1 py-2 rounded border border-danger text-danger hover:bg-red-50 transition font-medium">
               <X className="w-4 h-4" /> Tolak
@@ -212,6 +234,16 @@ export default function ApprovalPage() {
     <>
       <div className="p-4 max-w-md mx-auto">
         <h1 className="text-2xl font-bold mb-4 text-primary">Approval Harga</h1>
+
+        <div className={`mb-4 rounded-lg border p-3 text-sm ${canCurrentUserApprove ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+          <div className="flex items-center gap-2 font-bold">
+            <ShieldCheck className="h-4 w-4" />
+            Mode {roleLabel}: {session.name}
+          </div>
+          <div className="mt-1 text-xs leading-5">
+            {canCurrentUserApprove ? 'Owner bisa menyetujui dan menolak perubahan harga.' : 'Admin dan kasir hanya bisa melihat status approval.'}
+          </div>
+        </div>
 
         <div className="mb-4 grid grid-cols-3 rounded-lg border border-border bg-surface p-1 text-xs font-bold">
           {[

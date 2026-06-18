@@ -1,6 +1,7 @@
 import { db, type PriceCalculation } from '../db/db';
 import { PriceHistoryService } from './PriceHistoryService';
 import { ProductUnitCostHistoryService } from './ProductUnitCostHistoryService';
+import { SessionService, type AppRole } from './SessionService';
 
 export class ApprovalService {
   static resolveApprovedStatus(effectiveDate: string | undefined, now: Date = new Date()): 'ACTIVE' | 'SCHEDULED' {
@@ -27,7 +28,12 @@ export class ApprovalService {
     calculationId: string,
     approvedBy = 'Owner Lokal',
     now: Date = new Date(),
+    actorRole: AppRole = 'OWNER',
   ): Promise<'ACTIVE' | 'SCHEDULED'> {
+    if (!SessionService.canApprove(actorRole)) {
+      throw new Error('Hanya Owner yang bisa menyetujui approval harga.');
+    }
+
     const approvedAt = now.getTime();
     let resolvedStatus: 'ACTIVE' | 'SCHEDULED' = 'ACTIVE';
 
@@ -66,7 +72,12 @@ export class ApprovalService {
     calculationId: string,
     rejectedBy = 'Owner Lokal',
     rejectionReason?: string,
+    actorRole: AppRole = 'OWNER',
   ): Promise<void> {
+    if (!SessionService.canApprove(actorRole)) {
+      throw new Error('Hanya Owner yang bisa menolak approval harga.');
+    }
+
     const rejectedAt = Date.now();
     await db.priceCalculations.update(calculationId, {
       status: 'REJECTED',

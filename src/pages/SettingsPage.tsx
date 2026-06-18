@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Database, Download, Save } from 'lucide-react';
+import { ArrowLeft, Bell, Database, Download, Save, ShieldCheck } from 'lucide-react';
 import { db } from '../db/db';
 import { useAppAlert } from '../components/AppAlertContext';
+import { NotificationService } from '../services/NotificationService';
+import { ROLE_OPTIONS, SessionService, type AppRole } from '../services/SessionService';
 
 export default function SettingsPage() {
   const { showAlert } = useAppAlert();
@@ -16,11 +18,25 @@ export default function SettingsPage() {
   const [defaultPpnRateInput, setDefaultPpnRateInput] = useState<string | null>(null);
   const [defaultMarginInput, setDefaultMarginInput] = useState<string | null>(null);
   const [currencyFormatInput, setCurrencyFormatInput] = useState<string | null>(null);
+  const [currentUserNameInput, setCurrentUserNameInput] = useState<string | null>(null);
+  const [currentUserRoleInput, setCurrentUserRoleInput] = useState<AppRole | null>(null);
 
   const appName = appNameInput ?? settings.get('appName') ?? 'Kalkulator Tekad Mandiri';
   const defaultPpnRate = defaultPpnRateInput ?? settings.get('defaultPpnRate') ?? '11';
   const defaultMargin = defaultMarginInput ?? defaultRule?.marginPercent.toString() ?? '15';
   const currencyFormat = currencyFormatInput ?? settings.get('currencyFormat') ?? 'IDR';
+  const savedSession = SessionService.fromSettings(settings);
+  const currentUserRole = currentUserRoleInput ?? savedSession.role;
+  const currentUserName = currentUserNameInput ?? savedSession.name;
+  const notificationPermission = NotificationService.getPermission();
+  const notificationEnabled = settings.get(NotificationService.ENABLED_SETTING_KEY) === 'true' && notificationPermission === 'granted';
+  const notificationLabel = notificationPermission === 'unsupported'
+    ? 'Tidak didukung browser'
+    : notificationEnabled
+      ? 'Aktif'
+      : notificationPermission === 'denied'
+        ? 'Diblokir browser'
+        : 'Belum aktif';
 
   const handleSave = async () => {
     const parsedPpnRate = Number(defaultPpnRate);
@@ -28,6 +44,10 @@ export default function SettingsPage() {
 
     if (!appName.trim()) {
       showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Nama aplikasi wajib diisi.' });
+      return;
+    }
+    if (!currentUserName.trim()) {
+      showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Nama pengguna wajib diisi.' });
       return;
     }
     if (!Number.isFinite(parsedPpnRate) || parsedPpnRate < 0) {
@@ -46,6 +66,8 @@ export default function SettingsPage() {
           { key: 'defaultPpnRate', value: parsedPpnRate.toString() },
           { key: 'currencyFormat', value: currencyFormat },
           { key: 'roundingMode', value: 'NEAREST_THOUSAND_500_THRESHOLD' },
+          { key: SessionService.ROLE_SETTING_KEY, value: currentUserRole },
+          { key: SessionService.NAME_SETTING_KEY, value: currentUserName.trim() },
         ]);
 
         await db.marginRules.put({
@@ -63,6 +85,32 @@ export default function SettingsPage() {
       console.error(error);
       showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Settings belum berhasil disimpan. Coba ulangi lagi.' });
     }
+  };
+
+  const handleRoleChange = (nextRole: AppRole) => {
+    setCurrentUserRoleInput(nextRole);
+    if (currentUserName === SessionService.defaultNameForRole(currentUserRole)) {
+      setCurrentUserNameInput(SessionService.defaultNameForRole(nextRole));
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    if (notificationEnabled) {
+      await NotificationService.setEnabled(false);
+      showAlert({ tone: 'info', title: 'Notifikasi Dimatikan', message: 'Notifikasi approval tidak akan tampil di device ini.' });
+      return;
+    }
+
+    const permission = await NotificationService.requestPermission();
+    if (permission === 'granted') {
+      showAlert({ tone: 'success', title: 'Notifikasi Aktif', message: 'Device ini akan menampilkan notifikasi approval saat aplikasi terbuka.' });
+      return;
+    }
+    if (permission === 'denied') {
+      showAlert({ tone: 'warning', title: 'Izin Diblokir', message: 'Buka pengaturan browser untuk mengizinkan notifikasi aplikasi ini.' });
+      return;
+    }
+    showAlert({ tone: 'warning', title: 'Tidak Didukung', message: 'Browser ini belum mendukung notifikasi aplikasi.' });
   };
 
   const handleExport = async () => {
@@ -122,6 +170,45 @@ export default function SettingsPage() {
           <div>
             <label className="block text-sm font-medium mb-1">Rounding Mode</label>
             <input className="input bg-gray-50 text-textMuted" value="Ribuan terdekat" readOnly />
+          </div>
+        </div>
+
+        <div className="card space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-primary">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-bold text-textMain">Role & Notifikasi</h2>
+              <p className="mt-0.5 text-sm leading-5 text-textMuted">Role berlaku untuk device ini.</p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Nama Pengguna</label>
+            <input className="input" value={currentUserName} onChange={e => setCurrentUserNameInput(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Role</label>
+            <select className="input" value={currentUserRole} onChange={e => handleRoleChange(e.target.value as AppRole)}>
+              {ROLE_OPTIONS.map(role => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
+            </select>
+            <div className="mt-1 text-xs leading-5 text-textMuted">
+              {ROLE_OPTIONS.find(role => role.value === currentUserRole)?.description}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-gray-50 p-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-bold text-textMain">
+                <Bell className="h-4 w-4 text-primary" />
+                Notifikasi Approval
+              </div>
+              <div className="mt-0.5 text-xs text-textMuted">{notificationLabel}</div>
+            </div>
+            <button type="button" onClick={handleToggleNotifications} className="btn-secondary shrink-0 px-3 py-2 text-sm">
+              {notificationEnabled ? 'Matikan' : 'Aktifkan'}
+            </button>
           </div>
         </div>
 

@@ -29,7 +29,7 @@ const menuItems = [
   {
     to: '/settings',
     title: 'Settings',
-    description: 'PPN, margin default, dan backup',
+    description: 'Role, notifikasi, PPN, dan backup',
     icon: Settings,
   },
 ];

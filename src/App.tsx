@@ -18,6 +18,7 @@ import MorePage from './pages/MorePage';
 import ImportCsvPage from './pages/ImportCsvPage';
 import RealtimeSyncPage from './pages/RealtimeSyncPage';
 import { realtimeSyncService } from './services/RealtimeSyncService';
+import { ApprovalNotificationWatcher } from './components/ApprovalNotificationWatcher';
 
 function App() {
   const location = useLocation();
@@ -38,6 +39,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-textMain">
+      <ApprovalNotificationWatcher />
       <main className="flex-1 overflow-y-auto pb-20">
         <Routes>
           <Route path="/" element={<HomePage />} />

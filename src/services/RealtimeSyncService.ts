@@ -26,6 +26,14 @@ let status: ConnectionStatus = 'DISABLED';
 let reconnectTimer: number | undefined;
 let manualClose = false;
 let publishingCatalog = false;
+const DEVICE_SETTING_KEYS = new Set([
+  'realtimeEnabled',
+  'realtimeUrl',
+  'realtimeApiToken',
+  'currentUserRole',
+  'currentUserName',
+  'browserNotificationsEnabled',
+]);
 
 function emit(nextStatus: ConnectionStatus) {
   status = nextStatus;
@@ -71,7 +79,7 @@ async function buildCatalogSnapshot() {
     priceCalculations: await db.priceCalculations.toArray(),
     priceHistories: await db.priceHistories.toArray(),
     productUnitCostHistories: await db.productUnitCostHistories.toArray(),
-    appSettings: await db.appSettings.toArray()
+    appSettings: (await db.appSettings.toArray()).filter(setting => !DEVICE_SETTING_KEYS.has(setting.key))
   };
 }
 
@@ -83,8 +91,6 @@ type CloudState = {
   stock_events?: number;
   storage?: string;
 };
-
-const DEVICE_SETTING_KEYS = new Set(['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken']);
 
 function toHttpUrl(url: string) {
   const trimmed = (url || DEFAULT_URL).trim().replace(/\/$/, '');

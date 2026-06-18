@@ -8,6 +8,7 @@ import { MarginRuleResolver } from '../services/MarginRuleResolver';
 import { ApprovalService } from '../services/ApprovalService';
 import { UnitCostAllocationService } from '../services/UnitCostAllocationService';
 import { InvoiceLineCalculatorService, type InvoiceLineResult } from '../services/InvoiceLineCalculatorService';
+import { SessionService } from '../services/SessionService';
 import { formatCurrency, formatNumber } from '../utils/format';
 import { useAppAlert } from '../components/AppAlertContext';
 
@@ -86,6 +87,7 @@ export default function CalculatorPage() {
     : null;
 
   const settings = useMemo(() => new Map((appSettings ?? []).map(setting => [setting.key, setting.value])), [appSettings]);
+  const session = useMemo(() => SessionService.fromSettings(settings), [settings]);
   const defaultPpnRate = useMemo(() => {
     const value = Number(settings.get('defaultPpnRate') ?? '11');
     return Number.isFinite(value) && value >= 0 ? value : 11;
@@ -382,8 +384,9 @@ export default function CalculatorPage() {
 
     try {
       const now = Date.now();
+      const calculationId = crypto.randomUUID();
       await db.priceCalculations.add({
-        id: crypto.randomUUID(),
+        id: calculationId,
         productId: selectedProductId,
         productUnitId: selectedUnitId,
         inputCost: taxResult.inputCost,
@@ -403,7 +406,7 @@ export default function CalculatorPage() {
         status,
         effectiveDate: effectiveDate || undefined,
         changeReason: changeReason.trim() || undefined,
-        createdBy: 'Admin Lokal',
+        createdBy: session.name,
         createdAt: now,
         updatedAt: now,
       });

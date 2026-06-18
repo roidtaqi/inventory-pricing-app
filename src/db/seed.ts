@@ -20,6 +20,9 @@ const ensureCoreSettings = async () => {
   await ensureSetting('defaultPpnRate', '11');
   await ensureSetting('currencyFormat', 'IDR');
   await ensureSetting('roundingMode', 'NEAREST_THOUSAND_500_THRESHOLD');
+  await ensureSetting('currentUserRole', 'OWNER');
+  await ensureSetting('currentUserName', 'Owner Lokal');
+  await ensureSetting('browserNotificationsEnabled', 'false');
 
   const defaultMargin = await db.marginRules.where('ruleType').equals('STORE_DEFAULT').first();
   if (!defaultMargin) {
@@ -330,6 +333,9 @@ export const seedDatabase = async () => {
       { key: 'defaultPpnRate', value: '11' },
       { key: 'currencyFormat', value: 'IDR' },
       { key: 'roundingMode', value: 'NEAREST_THOUSAND_500_THRESHOLD' },
+      { key: 'currentUserRole', value: 'OWNER' },
+      { key: 'currentUserName', value: 'Owner Lokal' },
+      { key: 'browserNotificationsEnabled', value: 'false' },
     ]);
   });
 };
