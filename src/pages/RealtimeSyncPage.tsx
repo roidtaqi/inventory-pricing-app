@@ -9,6 +9,7 @@ import { formatCurrency } from '../utils/format';
 export default function RealtimeSyncPage() {
   const [enabled, setEnabled] = useState(false);
   const [url, setUrl] = useState('ws://localhost:8787');
+  const [apiToken, setApiToken] = useState('');
   const [status, setStatus] = useState(realtimeSyncService.getStatus());
   const [message, setMessage] = useState('');
   const posSales = useLiveQuery(() => db.posSales.orderBy('receivedAt').reverse().limit(20).toArray()) || [];
@@ -20,6 +21,7 @@ export default function RealtimeSyncPage() {
       if (!mounted) return;
       setEnabled(config.enabled);
       setUrl(config.url);
+      setApiToken(config.apiToken || '');
     });
 
     const unsubscribe = realtimeSyncService.subscribe(setStatus);
@@ -30,7 +32,7 @@ export default function RealtimeSyncPage() {
   }, []);
 
   const saveAndConnect = async () => {
-    await realtimeSyncService.saveConfig({ enabled, url });
+    await realtimeSyncService.saveConfig({ enabled, url, apiToken });
     if (enabled) {
       await realtimeSyncService.connect(url);
       setMessage('Realtime sync tersimpan dan koneksi dimulai.');
@@ -43,6 +45,30 @@ export default function RealtimeSyncPage() {
   const publishCatalog = async () => {
     const result = await realtimeSyncService.publishCatalogSnapshot();
     setMessage(result.success ? `Catalog terkirim: ${result.count} produk.` : result.message || 'Gagal mengirim catalog.');
+  };
+
+  const uploadCloudSnapshot = async () => {
+    try {
+      await realtimeSyncService.saveConfig({ enabled, url, apiToken });
+      const result = await realtimeSyncService.pushCloudSnapshot(url, apiToken);
+      setMessage(`Cloud tersimpan: ${result.count} produk. Buka HP lalu ambil data dari cloud.`);
+    } catch (error) {
+      console.error(error);
+      setMessage('Gagal upload data ke cloud. Periksa URL sync server dan token.');
+    }
+  };
+
+  const pullCloudSnapshot = async () => {
+    try {
+      await realtimeSyncService.saveConfig({ enabled, url, apiToken });
+      const result = await realtimeSyncService.pullCloudSnapshot(url, apiToken);
+      setMessage(result.success
+        ? `Cloud diterima: ${result.products} produk dan ${result.productUnits} satuan.`
+        : result.message || 'Cloud belum memiliki data.');
+    } catch (error) {
+      console.error(error);
+      setMessage('Gagal mengambil data cloud. Periksa URL sync server dan token.');
+    }
   };
 
   return (
@@ -68,7 +94,15 @@ export default function RealtimeSyncPage() {
             className="input"
             value={url}
             onChange={event => setUrl(event.target.value)}
-            placeholder="ws://localhost:8787"
+            placeholder="wss://pos-server.up.railway.app"
+          />
+
+          <input
+            className="input"
+            value={apiToken}
+            onChange={event => setApiToken(event.target.value)}
+            placeholder="API token opsional"
+            type="password"
           />
 
           <label className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-semibold text-textMain">
@@ -85,6 +119,15 @@ export default function RealtimeSyncPage() {
             <Send className="h-4 w-4" />
             Publish Catalog Sekarang
           </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={uploadCloudSnapshot} className="btn-secondary flex w-full items-center justify-center gap-2 text-sm">
+              Upload Cloud
+            </button>
+            <button onClick={pullCloudSnapshot} className="btn-secondary flex w-full items-center justify-center gap-2 text-sm">
+              Ambil Cloud
+            </button>
+          </div>
 
           {message && <div className="rounded-lg bg-indigo-50 p-3 text-sm font-semibold text-primary">{message}</div>}
         </div>

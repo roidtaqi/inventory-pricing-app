@@ -5,6 +5,7 @@ type ConnectionStatus = 'DISABLED' | 'CONNECTING' | 'CONNECTED' | 'OFFLINE' | 'E
 interface RealtimeConfig {
   enabled: boolean;
   url: string;
+  apiToken?: string;
 }
 
 interface SalePayload {
@@ -69,7 +70,63 @@ async function buildCatalogSnapshot() {
     marginRules: await db.marginRules.toArray(),
     priceCalculations: await db.priceCalculations.toArray(),
     priceHistories: await db.priceHistories.toArray(),
+    productUnitCostHistories: await db.productUnitCostHistories.toArray(),
     appSettings: await db.appSettings.toArray()
+  };
+}
+
+type CatalogSnapshot = Awaited<ReturnType<typeof buildCatalogSnapshot>>;
+
+function toHttpUrl(url: string) {
+  const trimmed = (url || DEFAULT_URL).trim().replace(/\/$/, '');
+  if (trimmed.startsWith('wss://')) return `https://${trimmed.slice(6)}`;
+  if (trimmed.startsWith('ws://')) return `http://${trimmed.slice(5)}`;
+  return trimmed;
+}
+
+function buildAuthHeaders(apiToken?: string) {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (apiToken) headers['x-sync-token'] = apiToken;
+  return headers;
+}
+
+async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
+  const appSettings = (snapshot.appSettings || []).filter(setting =>
+    !['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken'].includes(setting.key)
+  );
+
+  await db.transaction(
+    'rw',
+    [
+      db.categories,
+      db.brands,
+      db.suppliers,
+      db.products,
+      db.productUnits,
+      db.marginRules,
+      db.priceCalculations,
+      db.priceHistories,
+      db.productUnitCostHistories,
+      db.appSettings,
+    ],
+    async () => {
+      if (snapshot.categories?.length) await db.categories.bulkPut(snapshot.categories);
+      if (snapshot.brands?.length) await db.brands.bulkPut(snapshot.brands);
+      if (snapshot.suppliers?.length) await db.suppliers.bulkPut(snapshot.suppliers);
+      if (snapshot.products?.length) await db.products.bulkPut(snapshot.products);
+      if (snapshot.productUnits?.length) await db.productUnits.bulkPut(snapshot.productUnits);
+      if (snapshot.marginRules?.length) await db.marginRules.bulkPut(snapshot.marginRules);
+      if (snapshot.priceCalculations?.length) await db.priceCalculations.bulkPut(snapshot.priceCalculations);
+      if (snapshot.priceHistories?.length) await db.priceHistories.bulkPut(snapshot.priceHistories);
+      if (snapshot.productUnitCostHistories?.length) await db.productUnitCostHistories.bulkPut(snapshot.productUnitCostHistories);
+      if (appSettings.length) await db.appSettings.bulkPut(appSettings);
+    }
+  );
+
+  return {
+    products: snapshot.products?.length || 0,
+    productUnits: snapshot.productUnits?.length || 0,
+    priceCalculations: snapshot.priceCalculations?.length || 0,
   };
 }
 
@@ -112,17 +169,19 @@ function scheduleReconnect() {
 
 export const realtimeSyncService = {
   async getConfig(): Promise<RealtimeConfig> {
-    const settings = await db.appSettings.bulkGet(['realtimeEnabled', 'realtimeUrl']);
+    const settings = await db.appSettings.bulkGet(['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken']);
     return {
       enabled: settings[0]?.value === 'true',
-      url: settings[1]?.value || DEFAULT_URL
+      url: settings[1]?.value || DEFAULT_URL,
+      apiToken: settings[2]?.value || ''
     };
   },
 
   async saveConfig(config: RealtimeConfig) {
     await db.appSettings.bulkPut([
       { key: 'realtimeEnabled', value: String(config.enabled) },
-      { key: 'realtimeUrl', value: config.url || DEFAULT_URL }
+      { key: 'realtimeUrl', value: config.url || DEFAULT_URL },
+      { key: 'realtimeApiToken', value: config.apiToken || '' }
     ]);
   },
 
@@ -158,7 +217,7 @@ export const realtimeSyncService = {
       send({
         type: 'client.hello',
         app: 'inventory',
-        client_name: 'Inventory Pricing App'
+        client_name: 'Kalkulator Tekad Mandiri'
       });
     });
 
@@ -220,6 +279,59 @@ export const realtimeSyncService = {
     await logSync('OUT', 'catalog.snapshot', 'SUCCESS', `Catalog snapshot dikirim: ${catalog.products.length} produk`);
     publishingCatalog = false;
     return { success: true, count: catalog.products.length };
+  },
+
+  async pushCloudSnapshot(customUrl?: string, customToken?: string) {
+    const config = await this.getConfig();
+    const baseUrl = toHttpUrl(customUrl || config.url);
+    const apiToken = customToken ?? config.apiToken;
+    const catalog = await buildCatalogSnapshot();
+
+    const response = await fetch(`${baseUrl}/api/inventory/snapshot`, {
+      method: 'PUT',
+      headers: buildAuthHeaders(apiToken),
+      body: JSON.stringify({
+        source: 'inventory-pricing-app',
+        payload: catalog,
+        created_at: new Date().toISOString()
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud sync gagal: ${response.status}`);
+    }
+
+    await logSync('OUT', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot tersimpan: ${catalog.products.length} produk`);
+    return { success: true, count: catalog.products.length };
+  },
+
+  async pullCloudSnapshot(customUrl?: string, customToken?: string) {
+    const config = await this.getConfig();
+    const baseUrl = toHttpUrl(customUrl || config.url);
+    const apiToken = customToken ?? config.apiToken;
+
+    const response = await fetch(`${baseUrl}/api/inventory/snapshot`, {
+      headers: apiToken ? { 'x-sync-token': apiToken } : undefined
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud sync gagal: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.snapshot) {
+      return {
+        success: false,
+        message: 'Cloud belum memiliki snapshot Inventory.',
+        products: 0,
+        productUnits: 0,
+        priceCalculations: 0,
+      };
+    }
+
+    const result = await importCatalogSnapshot(data.snapshot);
+    await logSync('IN', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot diterima: ${result.products} produk`);
+    return { success: true, ...result };
   }
 };
 

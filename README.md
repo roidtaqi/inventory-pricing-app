@@ -53,6 +53,40 @@ Catatan arsitektur:
 - Sync server lokal menyimpan event di `.sync-data/realtime-sync-state.json` pada repo POS.
 - Untuk production, WebSocket server ini perlu diberi auth, tenant/outlet scoping, retry policy, dan conflict resolution.
 
+## Cloud Sync Multi-device
+
+Untuk membuat data Inventory terlihat sama di laptop dan HP, gunakan sync server yang sudah berjalan di Railway.
+
+Contoh URL:
+
+```txt
+wss://pos-server.up.railway.app
+```
+
+Di halaman `Home -> Data & Pengaturan -> Sync`:
+
+1. Isi URL sync server.
+2. Isi `API token` jika service sync server memakai env `SYNC_API_TOKEN`.
+3. Di laptop yang datanya sudah lengkap, klik `Upload Cloud`.
+4. Di HP/perangkat lain, klik `Ambil Cloud`.
+
+`Upload Cloud` menyimpan snapshot Inventory ke sync server. `Ambil Cloud` mengambil dan menggabungkan data cloud ke IndexedDB perangkat tersebut.
+
+Data yang ikut disync:
+
+- Produk
+- Satuan produk
+- Kategori
+- Brand
+- Supplier
+- Margin rule
+- Draft/approval harga
+- Riwayat harga
+- Riwayat modal produk
+- Settings aplikasi, kecuali konfigurasi sync lokal perangkat
+
+Jika sync server Railway dipasangkan dengan PostgreSQL dan env `DATABASE_URL`, snapshot cloud akan tersimpan di PostgreSQL. Jika tidak ada `DATABASE_URL`, server fallback ke file storage/container.
+
 Build production:
 
 ```bash
