@@ -183,6 +183,35 @@ export interface RealtimeSyncLog {
   createdAt: number;
 }
 
+export type PosRoleName = 'Owner' | 'Admin' | 'Supervisor' | 'Kasir';
+
+export interface AuthRole {
+  id: string;
+  name: PosRoleName;
+  description: string;
+  permissions: string[];
+}
+
+export interface AuthPermission {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  role_id: string;
+  role: PosRoleName;
+  pin: string;
+  phone?: string;
+  email?: string;
+  position_title?: string;
+  profile_note?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export class InventoryPricingDatabase extends Dexie {
   categories!: Table<Category, number>;
   brands!: Table<Brand, number>;
@@ -198,6 +227,9 @@ export class InventoryPricingDatabase extends Dexie {
   appSettings!: Table<AppSetting, string>;
   posSales!: Table<PosSale, string>;
   realtimeSyncLogs!: Table<RealtimeSyncLog, string>;
+  authUsers!: Table<AuthUser, string>;
+  authRoles!: Table<AuthRole, string>;
+  authPermissions!: Table<AuthPermission, string>;
 
   constructor() {
     super('InventoryPricingDatabase');
@@ -252,6 +284,25 @@ export class InventoryPricingDatabase extends Dexie {
       appSettings: 'key',
       posSales: 'id, transactionId, outletId, cashierId, createdAt, receivedAt',
       realtimeSyncLogs: 'id, direction, eventType, status, createdAt'
+    });
+    this.version(5).stores({
+      categories: '++id, name, isActive',
+      brands: '++id, name, isActive',
+      suppliers: '++id, name, isActive',
+      products: 'id, sku, name, categoryId, brandId, supplierId, barcode, pricingMode, isActive',
+      productUnits: 'id, productId, unitName',
+      marginRules: 'id, ruleType, referenceId, isActive',
+      priceCalculations: 'id, productId, productUnitId, status, effectiveDate, createdAt',
+      priceHistories: 'id, productId, productUnitId, effectiveDate, createdAt',
+      productUnitCostHistories: 'id, productId, productUnitId, supplierId, source, effectiveDate, importBatchId, createdAt',
+      csvImportBatches: 'id, importType, status, createdAt',
+      csvImportRows: 'id, batchId, rowNumber, status, createdAt',
+      appSettings: 'key',
+      posSales: 'id, transactionId, outletId, cashierId, createdAt, receivedAt',
+      realtimeSyncLogs: 'id, direction, eventType, status, createdAt',
+      authUsers: 'id, role, role_id, pin, phone, email, is_active',
+      authRoles: 'id, name',
+      authPermissions: 'id, code',
     });
   }
 }

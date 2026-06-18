@@ -8,7 +8,7 @@ import { MarginRuleResolver } from '../services/MarginRuleResolver';
 import { ApprovalService } from '../services/ApprovalService';
 import { UnitCostAllocationService } from '../services/UnitCostAllocationService';
 import { InvoiceLineCalculatorService, type InvoiceLineResult } from '../services/InvoiceLineCalculatorService';
-import { SessionService } from '../services/SessionService';
+import { authService } from '../services/AuthService';
 import { formatCurrency, formatNumber } from '../utils/format';
 import { useAppAlert } from '../components/AppAlertContext';
 
@@ -87,7 +87,7 @@ export default function CalculatorPage() {
     : null;
 
   const settings = useMemo(() => new Map((appSettings ?? []).map(setting => [setting.key, setting.value])), [appSettings]);
-  const session = useMemo(() => SessionService.fromSettings(settings), [settings]);
+  const currentUser = authService.getCurrentUser();
   const defaultPpnRate = useMemo(() => {
     const value = Number(settings.get('defaultPpnRate') ?? '11');
     return Number.isFinite(value) && value >= 0 ? value : 11;
@@ -406,7 +406,7 @@ export default function CalculatorPage() {
         status,
         effectiveDate: effectiveDate || undefined,
         changeReason: changeReason.trim() || undefined,
-        createdBy: session.name,
+        createdBy: currentUser?.name ?? 'User POS',
         createdAt: now,
         updatedAt: now,
       });

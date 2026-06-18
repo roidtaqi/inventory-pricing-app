@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type PriceCalculation } from '../db/db';
 import { NotificationService } from '../services/NotificationService';
-import { SessionService } from '../services/SessionService';
+import { authService } from '../services/AuthService';
 
 const STORAGE_KEY = 'inventory-approval-notification-state-v1';
 const APPROVED_STATUSES = new Set<PriceCalculation['status']>(['ACTIVE', 'APPROVED', 'SCHEDULED']);
@@ -36,17 +36,16 @@ function buildState(calculations: PriceCalculation[]): StoredApprovalState {
 }
 
 export function ApprovalNotificationWatcher() {
-  const appSettings = useLiveQuery(() => db.appSettings.toArray());
   const calculations = useLiveQuery(() => db.priceCalculations.toArray());
   const products = useLiveQuery(() => db.products.toArray());
   const units = useLiveQuery(() => db.productUnits.toArray());
 
-  const session = useMemo(() => SessionService.fromSettings(appSettings), [appSettings]);
+  const currentUser = authService.getCurrentUser();
   const productById = useMemo(() => new Map((products ?? []).map(product => [product.id, product])), [products]);
   const unitById = useMemo(() => new Map((units ?? []).map(unit => [unit.id, unit])), [units]);
 
   useEffect(() => {
-    if (!appSettings || !calculations || !products || !units) {
+    if (!calculations || !products || !units) {
       return;
     }
 
@@ -67,7 +66,7 @@ export function ApprovalNotificationWatcher() {
       const productName = product?.name ?? 'Produk';
       const unitName = unit?.unitName;
 
-      if (!previousStatus && calculation.status === 'WAITING_APPROVAL' && SessionService.canApprove(session.role)) {
+      if (!previousStatus && calculation.status === 'WAITING_APPROVAL' && authService.canApprove(currentUser)) {
         void NotificationService.notifyApprovalSubmitted({
           productName,
           unitName,
@@ -97,7 +96,7 @@ export function ApprovalNotificationWatcher() {
     });
 
     writeStoredState(currentState);
-  }, [appSettings, calculations, products, units, productById, session.role, unitById]);
+  }, [calculations, currentUser, products, productById, units, unitById]);
 
   return null;
 }

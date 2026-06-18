@@ -1,5 +1,6 @@
 import { db, type Product } from './db';
 import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
+import { authService } from '../services/AuthService';
 
 const APP_NAME = 'Kalkulator Tekad Mandiri';
 const LEGACY_APP_NAME = 'Inventory & Pricing Calculator';
@@ -20,9 +21,8 @@ const ensureCoreSettings = async () => {
   await ensureSetting('defaultPpnRate', '11');
   await ensureSetting('currencyFormat', 'IDR');
   await ensureSetting('roundingMode', 'NEAREST_THOUSAND_500_THRESHOLD');
-  await ensureSetting('currentUserRole', 'OWNER');
-  await ensureSetting('currentUserName', 'Owner Lokal');
   await ensureSetting('browserNotificationsEnabled', 'false');
+  await db.appSettings.bulkDelete(['currentUserRole', 'currentUserName']);
 
   const defaultMargin = await db.marginRules.where('ruleType').equals('STORE_DEFAULT').first();
   if (!defaultMargin) {
@@ -69,6 +69,7 @@ export const seedDatabase = async () => {
   if (categoriesCount > 0) {
     await ensureCoreSettings();
     await ensureInitialCostHistories();
+    await authService.ensureAuthData();
     return;
   }
 
@@ -333,9 +334,9 @@ export const seedDatabase = async () => {
       { key: 'defaultPpnRate', value: '11' },
       { key: 'currencyFormat', value: 'IDR' },
       { key: 'roundingMode', value: 'NEAREST_THOUSAND_500_THRESHOLD' },
-      { key: 'currentUserRole', value: 'OWNER' },
-      { key: 'currentUserName', value: 'Owner Lokal' },
       { key: 'browserNotificationsEnabled', value: 'false' },
     ]);
   });
+
+  await authService.ensureAuthData();
 };

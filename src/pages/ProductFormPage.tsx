@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Product, type ProductUnit } from '../db/db';
 import { ArrowLeft, Camera, Plus, Save, ScanLine, Trash2 } from 'lucide-react';
 import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
+import { authService } from '../services/AuthService';
 import { formatCurrency } from '../utils/format';
 import { useAppAlert } from '../components/AppAlertContext';
 
@@ -18,6 +19,7 @@ export default function ProductFormPage() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
   const { showAlert } = useAppAlert();
+  const currentUser = authService.getCurrentUser();
 
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const brands = useLiveQuery(() => db.brands.toArray()) || [];
@@ -251,7 +253,7 @@ export default function ProductFormPage() {
                   previousFinalCost: existingUnit?.manualCost,
                   source: 'PRODUCT_FORM',
                   notes: existingUnit ? 'Update modal dari form produk' : 'Modal awal dari form produk',
-                  createdBy: 'Admin Lokal',
+                  createdBy: currentUser?.name ?? 'User POS',
                 }),
               );
             }

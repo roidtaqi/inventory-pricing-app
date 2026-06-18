@@ -1,16 +1,23 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Bell, Database, Download, Save, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Bell, Database, Download, LogOut, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { db } from '../db/db';
 import { useAppAlert } from '../components/AppAlertContext';
 import { NotificationService } from '../services/NotificationService';
-import { ROLE_OPTIONS, SessionService, type AppRole } from '../services/SessionService';
+import { authService } from '../services/AuthService';
+import { realtimeSyncService } from '../services/RealtimeSyncService';
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { showAlert } = useAppAlert();
   const appSettings = useLiveQuery(() => db.appSettings.toArray());
   const defaultRule = useLiveQuery(() => db.marginRules.where('ruleType').equals('STORE_DEFAULT').first());
+  const currentUser = authService.getCurrentUser();
+  const currentUserId = currentUser?.id;
+  const authUser = useLiveQuery(() => currentUserId ? db.authUsers.get(currentUserId) : undefined, [currentUserId]);
+  const authUsersCount = useLiveQuery(() => db.authUsers.count(), []) ?? 0;
+  const authRolesCount = useLiveQuery(() => db.authRoles.count(), []) ?? 0;
 
   const settings = useMemo(() => new Map((appSettings ?? []).map(setting => [setting.key, setting.value])), [appSettings]);
 
@@ -18,16 +25,12 @@ export default function SettingsPage() {
   const [defaultPpnRateInput, setDefaultPpnRateInput] = useState<string | null>(null);
   const [defaultMarginInput, setDefaultMarginInput] = useState<string | null>(null);
   const [currencyFormatInput, setCurrencyFormatInput] = useState<string | null>(null);
-  const [currentUserNameInput, setCurrentUserNameInput] = useState<string | null>(null);
-  const [currentUserRoleInput, setCurrentUserRoleInput] = useState<AppRole | null>(null);
+  const [isSyncingUsers, setIsSyncingUsers] = useState(false);
 
   const appName = appNameInput ?? settings.get('appName') ?? 'Kalkulator Tekad Mandiri';
   const defaultPpnRate = defaultPpnRateInput ?? settings.get('defaultPpnRate') ?? '11';
   const defaultMargin = defaultMarginInput ?? defaultRule?.marginPercent.toString() ?? '15';
   const currencyFormat = currencyFormatInput ?? settings.get('currencyFormat') ?? 'IDR';
-  const savedSession = SessionService.fromSettings(settings);
-  const currentUserRole = currentUserRoleInput ?? savedSession.role;
-  const currentUserName = currentUserNameInput ?? savedSession.name;
   const notificationPermission = NotificationService.getPermission();
   const notificationEnabled = settings.get(NotificationService.ENABLED_SETTING_KEY) === 'true' && notificationPermission === 'granted';
   const notificationLabel = notificationPermission === 'unsupported'
@@ -46,10 +49,6 @@ export default function SettingsPage() {
       showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Nama aplikasi wajib diisi.' });
       return;
     }
-    if (!currentUserName.trim()) {
-      showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Nama pengguna wajib diisi.' });
-      return;
-    }
     if (!Number.isFinite(parsedPpnRate) || parsedPpnRate < 0) {
       showAlert({ tone: 'warning', title: 'Periksa Settings', message: 'Default PPN tidak boleh negatif.' });
       return;
@@ -66,8 +65,6 @@ export default function SettingsPage() {
           { key: 'defaultPpnRate', value: parsedPpnRate.toString() },
           { key: 'currencyFormat', value: currencyFormat },
           { key: 'roundingMode', value: 'NEAREST_THOUSAND_500_THRESHOLD' },
-          { key: SessionService.ROLE_SETTING_KEY, value: currentUserRole },
-          { key: SessionService.NAME_SETTING_KEY, value: currentUserName.trim() },
         ]);
 
         await db.marginRules.put({
@@ -84,13 +81,6 @@ export default function SettingsPage() {
     } catch (error) {
       console.error(error);
       showAlert({ tone: 'error', title: 'Gagal Menyimpan', message: 'Settings belum berhasil disimpan. Coba ulangi lagi.' });
-    }
-  };
-
-  const handleRoleChange = (nextRole: AppRole) => {
-    setCurrentUserRoleInput(nextRole);
-    if (currentUserName === SessionService.defaultNameForRole(currentUserRole)) {
-      setCurrentUserNameInput(SessionService.defaultNameForRole(nextRole));
     }
   };
 
@@ -111,6 +101,28 @@ export default function SettingsPage() {
       return;
     }
     showAlert({ tone: 'warning', title: 'Tidak Didukung', message: 'Browser ini belum mendukung notifikasi aplikasi.' });
+  };
+
+  const handleSyncUsers = async () => {
+    setIsSyncingUsers(true);
+    try {
+      const result = await realtimeSyncService.pullPosAuthSnapshot();
+      if (result.success) {
+        showAlert({ tone: 'success', title: 'User POS Diperbarui', message: `${result.users} user dan ${result.roles} role sudah disamakan.` });
+        return;
+      }
+      showAlert({ tone: 'warning', title: 'Belum Ada Snapshot POS', message: result.message ?? 'Cloud POS belum memiliki data user.' });
+    } catch (error) {
+      console.error(error);
+      showAlert({ tone: 'error', title: 'Gagal Sinkron User', message: 'Belum bisa mengambil user dari POS Cloud. Coba lagi setelah POS melakukan backup semua data.' });
+    } finally {
+      setIsSyncingUsers(false);
+    }
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login', { replace: true });
   };
 
   const handleExport = async () => {
@@ -179,24 +191,37 @@ export default function SettingsPage() {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="font-bold text-textMain">Role & Notifikasi</h2>
-              <p className="mt-0.5 text-sm leading-5 text-textMuted">Role berlaku untuk device ini.</p>
+              <h2 className="font-bold text-textMain">{authUser?.name ?? currentUser?.name ?? 'User POS'}</h2>
+              <p className="mt-0.5 text-sm leading-5 text-textMuted">{authUser?.role ?? currentUser?.role ?? '-'} · {authUser?.position_title ?? currentUser?.position_title ?? 'Profil POS'}</p>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Nama Pengguna</label>
-            <input className="input" value={currentUserName} onChange={e => setCurrentUserNameInput(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Role</label>
-            <select className="input" value={currentUserRole} onChange={e => handleRoleChange(e.target.value as AppRole)}>
-              {ROLE_OPTIONS.map(role => (
-                <option key={role.value} value={role.value}>{role.label}</option>
-              ))}
-            </select>
-            <div className="mt-1 text-xs leading-5 text-textMuted">
-              {ROLE_OPTIONS.find(role => role.value === currentUserRole)?.description}
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg bg-gray-50 p-3">
+              <div className="text-xs font-bold uppercase text-textMuted">Email</div>
+              <div className="mt-1 truncate font-medium text-textMain">{authUser?.email ?? currentUser?.email ?? '-'}</div>
             </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+              <div className="text-xs font-bold uppercase text-textMuted">Nomor HP</div>
+              <div className="mt-1 truncate font-medium text-textMain">{authUser?.phone ?? currentUser?.phone ?? '-'}</div>
+            </div>
+          </div>
+          {authUser?.profile_note && (
+            <div className="rounded-lg bg-gray-50 p-3 text-sm leading-6 text-textMuted">
+              {authUser.profile_note}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={handleSyncUsers} disabled={isSyncingUsers} className="btn-secondary flex items-center justify-center gap-2 py-2 text-sm">
+              <RefreshCw className={`h-4 w-4 ${isSyncingUsers ? 'animate-spin' : ''}`} />
+              {isSyncingUsers ? 'Sinkron...' : 'User POS'}
+            </button>
+            <button type="button" onClick={handleLogout} className="btn-secondary flex items-center justify-center gap-2 py-2 text-sm">
+              <LogOut className="h-4 w-4" />
+              Keluar
+            </button>
+          </div>
+          <div className="text-xs text-textMuted">
+            {authUsersCount} user · {authRolesCount} role tersimpan dari POS.
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-gray-50 p-3">
             <div className="min-w-0">

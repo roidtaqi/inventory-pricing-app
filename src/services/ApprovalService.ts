@@ -1,7 +1,6 @@
-import { db, type PriceCalculation } from '../db/db';
+import { db, type PosRoleName, type PriceCalculation } from '../db/db';
 import { PriceHistoryService } from './PriceHistoryService';
 import { ProductUnitCostHistoryService } from './ProductUnitCostHistoryService';
-import { SessionService, type AppRole } from './SessionService';
 
 export class ApprovalService {
   static resolveApprovedStatus(effectiveDate: string | undefined, now: Date = new Date()): 'ACTIVE' | 'SCHEDULED' {
@@ -26,11 +25,11 @@ export class ApprovalService {
 
   static async approveCalculation(
     calculationId: string,
-    approvedBy = 'Owner Lokal',
+    approvedBy = 'Owner',
     now: Date = new Date(),
-    actorRole: AppRole = 'OWNER',
+    actorRole: PosRoleName = 'Owner',
   ): Promise<'ACTIVE' | 'SCHEDULED'> {
-    if (!SessionService.canApprove(actorRole)) {
+    if (actorRole !== 'Owner') {
       throw new Error('Hanya Owner yang bisa menyetujui approval harga.');
     }
 
@@ -70,11 +69,11 @@ export class ApprovalService {
 
   static async rejectCalculation(
     calculationId: string,
-    rejectedBy = 'Owner Lokal',
+    rejectedBy = 'Owner',
     rejectionReason?: string,
-    actorRole: AppRole = 'OWNER',
+    actorRole: PosRoleName = 'Owner',
   ): Promise<void> {
-    if (!SessionService.canApprove(actorRole)) {
+    if (actorRole !== 'Owner') {
       throw new Error('Hanya Owner yang bisa menolak approval harga.');
     }
 
@@ -104,7 +103,7 @@ export class ApprovalService {
         }
         await ApprovalService.activateCalculation(
           latest,
-          latest.approvedBy ?? 'Owner Lokal',
+          latest.approvedBy ?? 'Owner',
           latest.approvedAt ?? now.getTime(),
         );
         activated += 1;

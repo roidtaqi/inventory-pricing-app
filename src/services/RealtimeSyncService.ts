@@ -1,4 +1,5 @@
 import { db } from '../db/db';
+import { authService } from './AuthService';
 
 type ConnectionStatus = 'DISABLED' | 'CONNECTING' | 'CONNECTED' | 'OFFLINE' | 'ERROR';
 
@@ -18,7 +19,8 @@ interface SalePayload {
   change: number;
 }
 
-const DEFAULT_URL = 'ws://localhost:8787';
+const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://pos-server.up.railway.app';
+const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || 'kastur-sync-2026-Roid-Nawir-8xAq72Lm';
 const listeners = new Set<(status: ConnectionStatus) => void>();
 
 let socket: WebSocket | null = null;
@@ -204,7 +206,7 @@ export const realtimeSyncService = {
     return {
       enabled: settings[0]?.value === 'true',
       url: settings[1]?.value || DEFAULT_URL,
-      apiToken: settings[2]?.value || ''
+      apiToken: settings[2]?.value || DEFAULT_API_TOKEN
     };
   },
 
@@ -379,6 +381,36 @@ export const realtimeSyncService = {
     const result = await importCatalogSnapshot(data.snapshot);
     await logSync('IN', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot diterima dan katalog lokal disamakan: ${result.products} produk`);
     return { success: true, ...result };
+  },
+
+  async pullPosAuthSnapshot(customUrl?: string, customToken?: string) {
+    const config = await this.getConfig();
+    const baseUrl = toHttpUrl(customUrl || config.url);
+    const apiToken = customToken ?? config.apiToken;
+
+    const response = await fetch(`${baseUrl}/api/pos/snapshot`, {
+      headers: apiToken ? { 'x-sync-token': apiToken } : undefined
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud POS auth gagal: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.snapshot) {
+      return {
+        success: false,
+        message: 'Cloud belum memiliki snapshot POS.',
+        users: 0,
+        roles: 0,
+      };
+    }
+
+    const result = await authService.importPosAuthSnapshot(data.snapshot);
+    if (result.success) {
+      await logSync('IN', 'pos.auth.snapshot', 'SUCCESS', `User POS diterima: ${result.users} user, ${result.roles} role`);
+    }
+    return result;
   }
 };
 
