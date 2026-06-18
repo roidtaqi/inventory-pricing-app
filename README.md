@@ -86,9 +86,12 @@ Data yang ikut disync:
 - Draft/approval harga
 - Riwayat harga
 - Riwayat modal produk
+- CSV import batch/row
+- Sales POS yang diterima Inventory
+- Sync log Inventory
 - Settings aplikasi, kecuali konfigurasi sync lokal perangkat
 
-Jika sync server Railway dipasangkan dengan PostgreSQL dan env `DATABASE_URL`, snapshot cloud akan tersimpan di PostgreSQL. Jika tidak ada `DATABASE_URL`, server fallback ke file storage/container.
+Jika sync server Railway dipasangkan dengan PostgreSQL dan env `DATABASE_URL`, snapshot cloud akan dipecah ke tabel PostgreSQL domain seperti `inventory_products`, `inventory_price_calculations`, `pos_users`, dan `pos_transactions`. Tabel `sync_state` masih ada untuk metadata/legacy fallback, tetapi bukan lagi satu-satunya tempat penyimpanan data. Jika tidak ada `DATABASE_URL`, server fallback ke file storage/container.
 
 Build production:
 

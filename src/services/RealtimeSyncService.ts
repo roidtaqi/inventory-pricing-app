@@ -81,6 +81,10 @@ async function buildCatalogSnapshot() {
     priceCalculations: await db.priceCalculations.toArray(),
     priceHistories: await db.priceHistories.toArray(),
     productUnitCostHistories: await db.productUnitCostHistories.toArray(),
+    csvImportBatches: await db.csvImportBatches.toArray(),
+    csvImportRows: await db.csvImportRows.toArray(),
+    posSales: await db.posSales.toArray(),
+    realtimeSyncLogs: await db.realtimeSyncLogs.toArray(),
     appSettings: (await db.appSettings.toArray()).filter(setting => !DEVICE_SETTING_KEYS.has(setting.key))
   };
 }
@@ -122,6 +126,10 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
       db.priceCalculations,
       db.priceHistories,
       db.productUnitCostHistories,
+      db.csvImportBatches,
+      db.csvImportRows,
+      db.posSales,
+      db.realtimeSyncLogs,
       db.appSettings,
     ],
     async () => {
@@ -135,6 +143,10 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
         db.priceCalculations.clear(),
         db.priceHistories.clear(),
         db.productUnitCostHistories.clear(),
+        db.csvImportBatches.clear(),
+        db.csvImportRows.clear(),
+        db.posSales.clear(),
+        db.realtimeSyncLogs.clear(),
       ]);
 
       const existingSettings = await db.appSettings.toArray();
@@ -152,6 +164,10 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
       if (snapshot.priceCalculations?.length) await db.priceCalculations.bulkPut(snapshot.priceCalculations);
       if (snapshot.priceHistories?.length) await db.priceHistories.bulkPut(snapshot.priceHistories);
       if (snapshot.productUnitCostHistories?.length) await db.productUnitCostHistories.bulkPut(snapshot.productUnitCostHistories);
+      if (snapshot.csvImportBatches?.length) await db.csvImportBatches.bulkPut(snapshot.csvImportBatches);
+      if (snapshot.csvImportRows?.length) await db.csvImportRows.bulkPut(snapshot.csvImportRows);
+      if (snapshot.posSales?.length) await db.posSales.bulkPut(snapshot.posSales);
+      if (snapshot.realtimeSyncLogs?.length) await db.realtimeSyncLogs.bulkPut(snapshot.realtimeSyncLogs);
       if (appSettings.length) await db.appSettings.bulkPut(appSettings);
     }
   );
@@ -160,6 +176,7 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
     products: snapshot.products?.length || 0,
     productUnits: snapshot.productUnits?.length || 0,
     priceCalculations: snapshot.priceCalculations?.length || 0,
+    posSales: snapshot.posSales?.length || 0,
   };
 }
 
