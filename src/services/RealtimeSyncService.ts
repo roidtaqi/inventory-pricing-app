@@ -76,6 +76,15 @@ async function buildCatalogSnapshot() {
 }
 
 type CatalogSnapshot = Awaited<ReturnType<typeof buildCatalogSnapshot>>;
+type CloudState = {
+  ok: boolean;
+  latest_catalog: boolean;
+  sales_events: number;
+  stock_events?: number;
+  storage?: string;
+};
+
+const DEVICE_SETTING_KEYS = new Set(['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken']);
 
 function toHttpUrl(url: string) {
   const trimmed = (url || DEFAULT_URL).trim().replace(/\/$/, '');
@@ -91,9 +100,7 @@ function buildAuthHeaders(apiToken?: string) {
 }
 
 async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
-  const appSettings = (snapshot.appSettings || []).filter(setting =>
-    !['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken'].includes(setting.key)
-  );
+  const appSettings = (snapshot.appSettings || []).filter(setting => !DEVICE_SETTING_KEYS.has(setting.key));
 
   await db.transaction(
     'rw',
@@ -110,6 +117,24 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
       db.appSettings,
     ],
     async () => {
+      await Promise.all([
+        db.categories.clear(),
+        db.brands.clear(),
+        db.suppliers.clear(),
+        db.products.clear(),
+        db.productUnits.clear(),
+        db.marginRules.clear(),
+        db.priceCalculations.clear(),
+        db.priceHistories.clear(),
+        db.productUnitCostHistories.clear(),
+      ]);
+
+      const existingSettings = await db.appSettings.toArray();
+      const syncedSettingKeys = existingSettings
+        .filter(setting => !DEVICE_SETTING_KEYS.has(setting.key))
+        .map(setting => setting.key);
+      if (syncedSettingKeys.length) await db.appSettings.bulkDelete(syncedSettingKeys);
+
       if (snapshot.categories?.length) await db.categories.bulkPut(snapshot.categories);
       if (snapshot.brands?.length) await db.brands.bulkPut(snapshot.brands);
       if (snapshot.suppliers?.length) await db.suppliers.bulkPut(snapshot.suppliers);
@@ -305,6 +330,22 @@ export const realtimeSyncService = {
     return { success: true, count: catalog.products.length };
   },
 
+  async getCloudState(customUrl?: string, customToken?: string): Promise<CloudState> {
+    const config = await this.getConfig();
+    const baseUrl = toHttpUrl(customUrl || config.url);
+    const apiToken = customToken ?? config.apiToken;
+
+    const response = await fetch(`${baseUrl}/api/state`, {
+      headers: apiToken ? { 'x-sync-token': apiToken } : undefined
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud state gagal: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
   async pullCloudSnapshot(customUrl?: string, customToken?: string) {
     const config = await this.getConfig();
     const baseUrl = toHttpUrl(customUrl || config.url);
@@ -330,7 +371,7 @@ export const realtimeSyncService = {
     }
 
     const result = await importCatalogSnapshot(data.snapshot);
-    await logSync('IN', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot diterima: ${result.products} produk`);
+    await logSync('IN', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot diterima dan katalog lokal disamakan: ${result.products} produk`);
     return { success: true, ...result };
   }
 };

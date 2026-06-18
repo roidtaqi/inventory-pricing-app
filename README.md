@@ -67,10 +67,13 @@ Di halaman `Home -> Data & Pengaturan -> Sync`:
 
 1. Isi URL sync server.
 2. Isi `API token` jika service sync server memakai env `SYNC_API_TOKEN`.
-3. Di laptop yang datanya sudah lengkap, klik `Upload Cloud`.
-4. Di HP/perangkat lain, klik `Ambil Cloud`.
+3. Klik `Cek Cloud` untuk memastikan URL/token sudah benar.
+4. Di laptop/perangkat yang datanya paling lengkap, klik `Upload Cloud`.
+5. Di HP/perangkat lain, klik `Ambil Cloud`.
 
-`Upload Cloud` menyimpan snapshot Inventory ke sync server. `Ambil Cloud` mengambil dan menggabungkan data cloud ke IndexedDB perangkat tersebut.
+`Upload Cloud` menyimpan snapshot Inventory ke sync server. `Ambil Cloud` mengambil snapshot cloud dan menyamakan katalog lokal perangkat tersebut dengan data cloud, sehingga sisa data contoh atau data lama di device baru tidak ikut tercampur.
+
+Jika `Cek Cloud` menampilkan cloud masih kosong, berarti belum ada perangkat utama yang berhasil melakukan `Upload Cloud`, atau URL/token belum sama dengan konfigurasi sync server Railway.
 
 Data yang ikut disync:
 
