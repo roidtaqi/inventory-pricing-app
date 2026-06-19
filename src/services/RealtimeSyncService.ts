@@ -196,9 +196,6 @@ function scheduleCloudSnapshotPush(delay = CLOUD_PUSH_DEBOUNCE_MS) {
   cloudPushTimer = window.setTimeout(async () => {
     if (pushingCloudSnapshot) return;
 
-    const config = await realtimeSyncService.getConfig();
-    if (!config.enabled) return;
-
     pushingCloudSnapshot = true;
     try {
       await realtimeSyncService.pushCloudSnapshot();
@@ -214,9 +211,6 @@ function scheduleCloudSnapshotPush(delay = CLOUD_PUSH_DEBOUNCE_MS) {
 
 async function autoPullCloudSnapshot() {
   if (pullingCloudSnapshot || pushingCloudSnapshot || localCatalogDirty) return;
-
-  const config = await realtimeSyncService.getConfig();
-  if (!config.enabled) return;
 
   pullingCloudSnapshot = true;
   try {
@@ -295,9 +289,9 @@ export const realtimeSyncService = {
 
   async autoStart() {
     const config = await this.getConfig();
+    this.startAutoCloudPull();
     if (config.enabled) {
       await this.connect(config.url);
-      this.startAutoCloudPull();
     }
   },
 

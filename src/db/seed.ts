@@ -14,6 +14,12 @@ const ensureSetting = async (key: string, value: string) => {
   if (key === 'appName' && existing.value === LEGACY_APP_NAME) {
     await db.appSettings.put({ key, value });
   }
+  if (key === 'realtimeEnabled' && existing.value !== 'true') {
+    await db.appSettings.put({ key, value });
+  }
+  if ((key === 'realtimeUrl' || key === 'realtimeApiToken') && !existing.value) {
+    await db.appSettings.put({ key, value });
+  }
 };
 
 const ensureCoreSettings = async () => {
