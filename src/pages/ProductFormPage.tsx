@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Product, type ProductUnit } from '../db/db';
 import { ArrowLeft, Camera, Plus, Save, ScanLine, Trash2 } from 'lucide-react';
 import { ProductUnitCostHistoryService } from '../services/ProductUnitCostHistoryService';
+import { PriceHistoryService } from '../services/PriceHistoryService';
 import { authService } from '../services/AuthService';
 import { formatCurrency } from '../utils/format';
 import { useAppAlert } from '../components/AppAlertContext';
@@ -20,6 +21,7 @@ export default function ProductFormPage() {
   const isEdit = Boolean(id);
   const { showAlert } = useAppAlert();
   const currentUser = authService.getCurrentUser();
+  const canEditActiveSellingPrice = authService.canApprove(currentUser);
 
   const categories = useLiveQuery(() => db.categories.toArray()) || [];
   const brands = useLiveQuery(() => db.brands.toArray()) || [];
@@ -39,6 +41,7 @@ export default function ProductFormPage() {
   const [isActive, setIsActive] = useState(true);
   const [notes, setNotes] = useState('');
   const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [priceChangeReason, setPriceChangeReason] = useState('');
   
   const [units, setUnits] = useState<Partial<ProductUnit>[]>([]);
   const [activeTab, setActiveTab] = useState<ProductFormTab>('info');
@@ -202,7 +205,33 @@ export default function ProductFormPage() {
         }
       }
 
-      await db.transaction('rw', db.products, db.productUnits, db.productUnitCostHistories, async () => {
+      const existingUnitsForValidation = await db.productUnits.where('productId').equals(productId).toArray();
+      const hasExistingActivePriceChange = units.some(unit => {
+        const existingUnit = unit.id ? existingUnitsForValidation.find(item => item.id === unit.id) : undefined;
+        return Boolean(existingUnit && existingUnit.activeSellingPrice !== Number(unit.activeSellingPrice));
+      });
+      const hasNewActivePrice = units.some(unit => {
+        const existingUnit = unit.id ? existingUnitsForValidation.find(item => item.id === unit.id) : undefined;
+        return !existingUnit && Number(unit.activeSellingPrice) > 0;
+      });
+      if ((hasExistingActivePriceChange || hasNewActivePrice) && !canEditActiveSellingPrice) {
+        showAlert({
+          tone: 'warning',
+          title: 'Akses Harga Aktif',
+          message: 'Harga jual aktif hanya bisa diubah Owner. Gunakan Kalkulator lalu Ajukan Approval untuk perubahan harga.',
+        });
+        return;
+      }
+      if (hasExistingActivePriceChange && !priceChangeReason.trim()) {
+        showAlert({
+          tone: 'warning',
+          title: 'Alasan Diperlukan',
+          message: 'Isi alasan perubahan harga jual aktif agar riwayat harga dapat diaudit.',
+        });
+        return;
+      }
+
+      await db.transaction('rw', db.products, db.productUnits, db.productUnitCostHistories, db.priceHistories, async () => {
         const productData: Product = {
           id: productId,
           sku: trimmedSku,
@@ -230,13 +259,29 @@ export default function ProductFormPage() {
                 unitName: u.unitName!.trim(),
                 conversionToBase: Number(u.conversionToBase),
                 manualCost: Number(u.manualCost),
-                activeSellingPrice: Number(u.activeSellingPrice),
+                activeSellingPrice: canEditActiveSellingPrice || !existingUnit ? Number(u.activeSellingPrice) : existingUnit.activeSellingPrice,
                 minSellingPrice: u.minSellingPrice,
                 maxSellingPrice: u.maxSellingPrice,
             };
 
             await db.productUnits.put(unitData);
             nextUnitIds.add(unitId);
+
+            if (existingUnit && existingUnit.activeSellingPrice !== unitData.activeSellingPrice) {
+              await db.priceHistories.add(
+                PriceHistoryService.buildFromManualPriceChange({
+                  productId,
+                  productUnitId: unitId,
+                  oldCost: existingUnit.manualCost,
+                  newCost: unitData.manualCost,
+                  oldPrice: existingUnit.activeSellingPrice,
+                  newPrice: unitData.activeSellingPrice,
+                  pricingMode: productData.pricingMode,
+                  changeReason: priceChangeReason.trim(),
+                  changedBy: currentUser?.name ?? 'Owner',
+                }),
+              );
+            }
 
             if (!existingUnit || existingUnit.manualCost !== unitData.manualCost) {
               await db.productUnitCostHistories.add(
@@ -421,6 +466,22 @@ export default function ProductFormPage() {
               </button>
             </div>
 
+            {canEditActiveSellingPrice ? (
+              <div className="card border-amber-200 bg-amber-50 text-sm text-amber-800">
+                <label className="block font-semibold mb-1">Alasan Perubahan Harga Jual Aktif</label>
+                <textarea
+                  className="input min-h-20 resize-none bg-white"
+                  value={priceChangeReason}
+                  onChange={event => setPriceChangeReason(event.target.value)}
+                  placeholder="Wajib diisi jika mengubah harga jual aktif"
+                />
+              </div>
+            ) : (
+              <div className="card border-amber-200 bg-amber-50 text-sm leading-6 text-amber-800">
+                Harga Jual Aktif hanya dapat diubah Owner. Gunakan Kalkulator lalu Ajukan Approval untuk perubahan harga.
+              </div>
+            )}
+
             {units.length === 0 && (
               <div className="card text-center text-sm text-textMuted py-6">Belum ada satuan ditambahkan</div>
             )}
@@ -449,7 +510,13 @@ export default function ProductFormPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1">Harga Jual Aktif</label>
-                    <input type="number" className="input py-1.5 text-sm" value={unit.activeSellingPrice} onChange={e => handleUpdateUnit(index, 'activeSellingPrice', Number(e.target.value))} />
+                    <input
+                      type="number"
+                      className="input py-1.5 text-sm disabled:bg-gray-100 disabled:text-textMuted"
+                      value={unit.activeSellingPrice}
+                      disabled={!canEditActiveSellingPrice}
+                      onChange={e => handleUpdateUnit(index, 'activeSellingPrice', Number(e.target.value))}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1">Harga Min & Max</label>

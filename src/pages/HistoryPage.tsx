@@ -158,6 +158,11 @@ export default function HistoryPage() {
                 <span>Berlaku {effectiveDate}</span>
                 <span>Approved by {h.approvedBy ?? '-'}</span>
               </div>
+
+              <div className="rounded-lg bg-gray-50 p-2 text-xs text-textMuted">
+                <div className="font-semibold text-textMain">Diubah oleh {h.changedBy ?? h.approvedBy ?? '-'}</div>
+                <div className="mt-1">{h.changeReason || 'Tidak ada alasan perubahan yang dicatat.'}</div>
+              </div>
             </div>
           );
           })}
