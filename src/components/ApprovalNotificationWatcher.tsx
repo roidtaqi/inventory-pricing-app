@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type PriceCalculation } from '../db/db';
 import { NotificationService } from '../services/NotificationService';
 import { authService } from '../services/AuthService';
+import { useAppAlert } from './AppAlertContext';
 
 const STORAGE_KEY = 'inventory-approval-notification-state-v1';
 const APPROVED_STATUSES = new Set<PriceCalculation['status']>(['ACTIVE', 'APPROVED', 'SCHEDULED']);
@@ -35,7 +36,47 @@ function buildState(calculations: PriceCalculation[]): StoredApprovalState {
   }, {});
 }
 
+async function notifyWithAlertFallback(showAlert: ReturnType<typeof useAppAlert>['showAlert'], kind: 'submitted' | 'approved' | 'rejected', input: {
+  productName: string;
+  unitName?: string;
+  actorName?: string;
+  statusLabel?: string;
+  reason?: string;
+}) {
+  const sent = kind === 'submitted'
+    ? await NotificationService.notifyApprovalSubmitted(input)
+    : kind === 'approved'
+      ? await NotificationService.notifyApprovalApproved(input)
+      : await NotificationService.notifyApprovalRejected(input);
+
+  if (sent) return;
+
+  const label = input.unitName ? `${input.productName} (${input.unitName})` : input.productName;
+  if (kind === 'submitted') {
+    showAlert({
+      tone: 'info',
+      title: 'Approval Baru',
+      message: `${label} menunggu approval${input.actorName ? ` dari ${input.actorName}` : ''}.`
+    });
+    return;
+  }
+  if (kind === 'approved') {
+    showAlert({
+      tone: 'success',
+      title: 'Harga Disetujui',
+      message: `${label} sudah disetujui${input.statusLabel ? ` (${input.statusLabel})` : ''}.`
+    });
+    return;
+  }
+  showAlert({
+    tone: 'warning',
+    title: 'Approval Ditolak',
+    message: `${label} ditolak${input.reason ? `: ${input.reason}` : ''}.`
+  });
+}
+
 export function ApprovalNotificationWatcher() {
+  const { showAlert } = useAppAlert();
   const calculations = useLiveQuery(() => db.priceCalculations.toArray());
   const products = useLiveQuery(() => db.products.toArray());
   const units = useLiveQuery(() => db.productUnits.toArray());
@@ -67,7 +108,7 @@ export function ApprovalNotificationWatcher() {
       const unitName = unit?.unitName;
 
       if (!previousStatus && calculation.status === 'WAITING_APPROVAL' && authService.canApprove(currentUser)) {
-        void NotificationService.notifyApprovalSubmitted({
+        void notifyWithAlertFallback(showAlert, 'submitted', {
           productName,
           unitName,
           actorName: calculation.createdBy,
@@ -76,7 +117,7 @@ export function ApprovalNotificationWatcher() {
       }
 
       if (previousStatus === 'WAITING_APPROVAL' && APPROVED_STATUSES.has(calculation.status)) {
-        void NotificationService.notifyApprovalApproved({
+        void notifyWithAlertFallback(showAlert, 'approved', {
           productName,
           unitName,
           actorName: calculation.approvedBy,
@@ -86,7 +127,7 @@ export function ApprovalNotificationWatcher() {
       }
 
       if (previousStatus === 'WAITING_APPROVAL' && calculation.status === 'REJECTED') {
-        void NotificationService.notifyApprovalRejected({
+        void notifyWithAlertFallback(showAlert, 'rejected', {
           productName,
           unitName,
           actorName: calculation.rejectedBy,
@@ -96,7 +137,7 @@ export function ApprovalNotificationWatcher() {
     });
 
     writeStoredState(currentState);
-  }, [calculations, currentUser, products, productById, units, unitById]);
+  }, [calculations, currentUser, products, productById, showAlert, units, unitById]);
 
   return null;
 }

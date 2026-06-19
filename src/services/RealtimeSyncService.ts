@@ -26,8 +26,16 @@ const listeners = new Set<(status: ConnectionStatus) => void>();
 let socket: WebSocket | null = null;
 let status: ConnectionStatus = 'DISABLED';
 let reconnectTimer: number | undefined;
+let autoPullTimer: number | undefined;
+let cloudPushTimer: number | undefined;
 let manualClose = false;
 let publishingCatalog = false;
+let pushingCloudSnapshot = false;
+let pullingCloudSnapshot = false;
+let localCatalogDirty = false;
+let lastImportedCloudSnapshotAt: string | null = null;
+const AUTO_PULL_INTERVAL_MS = 20000;
+const CLOUD_PUSH_DEBOUNCE_MS = 900;
 const DEVICE_SETTING_KEYS = new Set([
   'realtimeEnabled',
   'realtimeUrl',
@@ -180,6 +188,46 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
   };
 }
 
+function scheduleCloudSnapshotPush(delay = CLOUD_PUSH_DEBOUNCE_MS) {
+  if (typeof window === 'undefined') return;
+
+  localCatalogDirty = true;
+  window.clearTimeout(cloudPushTimer);
+  cloudPushTimer = window.setTimeout(async () => {
+    if (pushingCloudSnapshot) return;
+
+    const config = await realtimeSyncService.getConfig();
+    if (!config.enabled) return;
+
+    pushingCloudSnapshot = true;
+    try {
+      await realtimeSyncService.pushCloudSnapshot();
+      localCatalogDirty = false;
+    } catch (error) {
+      console.warn('Auto cloud snapshot push failed', error);
+      await logSync('OUT', 'cloud.snapshot', 'FAILED', 'Auto upload cloud gagal');
+    } finally {
+      pushingCloudSnapshot = false;
+    }
+  }, delay);
+}
+
+async function autoPullCloudSnapshot() {
+  if (pullingCloudSnapshot || pushingCloudSnapshot || localCatalogDirty) return;
+
+  const config = await realtimeSyncService.getConfig();
+  if (!config.enabled) return;
+
+  pullingCloudSnapshot = true;
+  try {
+    await realtimeSyncService.pullCloudSnapshot(undefined, undefined, { automated: true });
+  } catch (error) {
+    console.warn('Auto cloud snapshot pull failed', error);
+  } finally {
+    pullingCloudSnapshot = false;
+  }
+}
+
 async function importSaleEvent(message: { event_id?: string; payload?: SalePayload }) {
   const payload = message.payload;
   if (!payload?.transaction_id) return;
@@ -221,7 +269,7 @@ export const realtimeSyncService = {
   async getConfig(): Promise<RealtimeConfig> {
     const settings = await db.appSettings.bulkGet(['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken']);
     return {
-      enabled: settings[0]?.value === 'true',
+      enabled: settings[0]?.value !== 'false',
       url: settings[1]?.value || DEFAULT_URL,
       apiToken: settings[2]?.value || DEFAULT_API_TOKEN
     };
@@ -249,7 +297,25 @@ export const realtimeSyncService = {
     const config = await this.getConfig();
     if (config.enabled) {
       await this.connect(config.url);
+      this.startAutoCloudPull();
     }
+  },
+
+  startAutoCloudPull() {
+    if (typeof window === 'undefined') return;
+
+    window.clearInterval(autoPullTimer);
+    window.setTimeout(() => {
+      void autoPullCloudSnapshot();
+    }, 2500);
+    autoPullTimer = window.setInterval(() => {
+      void autoPullCloudSnapshot();
+    }, AUTO_PULL_INTERVAL_MS);
+  },
+
+  stopAutoCloudPull() {
+    window.clearInterval(autoPullTimer);
+    autoPullTimer = undefined;
   },
 
   async connect(customUrl?: string) {
@@ -299,6 +365,7 @@ export const realtimeSyncService = {
   disconnect() {
     manualClose = true;
     window.clearTimeout(reconnectTimer);
+    this.stopAutoCloudPull();
     socket?.close();
     socket = null;
     emit('DISABLED');
@@ -351,6 +418,7 @@ export const realtimeSyncService = {
       throw new Error(`Cloud sync gagal: ${response.status}`);
     }
 
+    localCatalogDirty = false;
     await logSync('OUT', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot tersimpan: ${catalog.products.length} produk`);
     return { success: true, count: catalog.products.length };
   },
@@ -371,7 +439,7 @@ export const realtimeSyncService = {
     return response.json();
   },
 
-  async pullCloudSnapshot(customUrl?: string, customToken?: string) {
+  async pullCloudSnapshot(customUrl?: string, customToken?: string, options: { automated?: boolean } = {}) {
     const config = await this.getConfig();
     const baseUrl = toHttpUrl(customUrl || config.url);
     const apiToken = customToken ?? config.apiToken;
@@ -395,7 +463,19 @@ export const realtimeSyncService = {
       };
     }
 
+    const updatedAt = data.updated_at || data.event?.received_at || data.event?.created_at || null;
+    if (options.automated && updatedAt && updatedAt === lastImportedCloudSnapshotAt) {
+      return {
+        success: true,
+        products: data.stats?.products || 0,
+        productUnits: data.stats?.product_units || 0,
+        priceCalculations: data.stats?.price_calculations || 0,
+        skipped: true,
+      };
+    }
+
     const result = await importCatalogSnapshot(data.snapshot);
+    lastImportedCloudSnapshotAt = updatedAt;
     await logSync('IN', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot diterima dan katalog lokal disamakan: ${result.products} produk`);
     return { success: true, ...result };
   },
@@ -436,5 +516,6 @@ if (typeof window !== 'undefined') {
     if (status === 'CONNECTED') {
       void realtimeSyncService.publishCatalogSnapshot();
     }
+    scheduleCloudSnapshotPush();
   });
 }

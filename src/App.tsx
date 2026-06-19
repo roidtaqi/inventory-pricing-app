@@ -3,6 +3,7 @@ import { Calculator, CheckSquare, History, Home, Package } from 'lucide-react';
 import clsx from 'clsx';
 import { type ReactNode, useEffect, useState } from 'react';
 import { seedDatabase } from './db/seed';
+import { db } from './db/db';
 
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -39,9 +40,23 @@ function App() {
     seedDatabase()
       .then(async () => {
         await authService.refreshCurrentUser();
-        setCurrentUser(authService.getCurrentUser());
+        const refreshedUser = authService.getCurrentUser();
+        setCurrentUser(refreshedUser);
         setIsReady(true);
         void realtimeSyncService.autoStart();
+        if (refreshedUser && !authService.canApprove(refreshedUser)) {
+          void db.priceCalculations
+            .where('status')
+            .equals('WAITING_APPROVAL')
+            .count()
+            .then((pendingCount) => {
+              if (pendingCount > 0) {
+                window.dispatchEvent(new CustomEvent('inventory-catalog-changed', {
+                  detail: { entity: 'price_calculation', action: 'recover_pending_approval_sync' }
+                }));
+              }
+            });
+        }
         void realtimeSyncService.pullPosAuthSnapshot()
           .then(() => authService.refreshCurrentUser())
           .then(() => setCurrentUser(authService.getCurrentUser()))

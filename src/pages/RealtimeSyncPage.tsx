@@ -67,6 +67,7 @@ export default function RealtimeSyncPage() {
     await realtimeSyncService.saveConfig({ enabled, url, apiToken });
     if (enabled) {
       await realtimeSyncService.connect(url);
+      realtimeSyncService.startAutoCloudPull();
       setMessage('Realtime sync tersimpan dan koneksi dimulai.');
     } else {
       realtimeSyncService.disconnect();

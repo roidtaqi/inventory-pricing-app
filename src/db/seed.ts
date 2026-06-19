@@ -22,6 +22,9 @@ const ensureCoreSettings = async () => {
   await ensureSetting('currencyFormat', 'IDR');
   await ensureSetting('roundingMode', 'NEAREST_THOUSAND_500_THRESHOLD');
   await ensureSetting('browserNotificationsEnabled', 'false');
+  await ensureSetting('realtimeEnabled', 'true');
+  await ensureSetting('realtimeUrl', 'wss://pos-server.up.railway.app');
+  await ensureSetting('realtimeApiToken', 'kastur-sync-2026-Roid-Nawir-8xAq72Lm');
   await db.appSettings.bulkDelete(['currentUserRole', 'currentUserName']);
 
   const defaultMargin = await db.marginRules.where('ruleType').equals('STORE_DEFAULT').first();

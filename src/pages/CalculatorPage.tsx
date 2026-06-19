@@ -411,6 +411,10 @@ export default function CalculatorPage() {
         updatedAt: now,
       });
 
+      window.dispatchEvent(new CustomEvent('inventory-catalog-changed', {
+        detail: { entity: 'price_calculation', action: status === 'WAITING_APPROVAL' ? 'approval_requested' : 'saved', id: calculationId }
+      }));
+
       showAlert({ tone: 'success', title: 'Kalkulasi Tersimpan', message: `Berhasil menyimpan sebagai ${status.replace('_', ' ')}.` });
       resetForm();
     } catch (error) {

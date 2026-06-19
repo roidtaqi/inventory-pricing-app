@@ -60,9 +60,7 @@ export class ApprovalService {
       await ApprovalService.activateCalculation(calculation, approvedBy, approvedAt);
     });
 
-    if (resolvedStatus === 'ACTIVE') {
-      ApprovalService.dispatchCatalogChanged();
-    }
+    ApprovalService.dispatchCatalogChanged('approval_approved');
 
     return resolvedStatus;
   }
@@ -85,6 +83,8 @@ export class ApprovalService {
       rejectionReason,
       updatedAt: rejectedAt,
     });
+
+    ApprovalService.dispatchCatalogChanged('approval_rejected');
   }
 
   static async activateDueScheduledPrices(now: Date = new Date()): Promise<number> {
@@ -111,7 +111,7 @@ export class ApprovalService {
     }
 
     if (activated > 0) {
-      ApprovalService.dispatchCatalogChanged();
+      ApprovalService.dispatchCatalogChanged('scheduled_price_activated');
     }
 
     return activated;
@@ -187,9 +187,9 @@ export class ApprovalService {
     return new Date(year, (month || 1) - 1, day || 1).getTime();
   }
 
-  private static dispatchCatalogChanged(): void {
+  private static dispatchCatalogChanged(action = 'catalog_changed'): void {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('inventory-catalog-changed'));
+      window.dispatchEvent(new CustomEvent('inventory-catalog-changed', { detail: { entity: 'approval', action } }));
     }
   }
 }
