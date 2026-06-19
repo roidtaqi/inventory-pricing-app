@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
-import { ChevronRight, Database, FileSpreadsheet, History, RefreshCw, Settings } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronRight, Database, FileSpreadsheet, History, LogOut, RefreshCw, Settings } from 'lucide-react';
+import { authService } from '../services/AuthService';
 
 const menuItems = [
   {
@@ -35,6 +36,13 @@ const menuItems = [
 ];
 
 export default function MorePage() {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    authService.logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="p-4 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-4 text-primary">Setup & Data</h1>
@@ -56,6 +64,21 @@ export default function MorePage() {
             </Link>
           );
         })}
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="card flex w-full items-center gap-3 text-left transition-colors hover:border-danger"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-danger/10 text-danger">
+            <LogOut className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-textMain">Logout</div>
+            <div className="mt-0.5 truncate text-sm text-textMuted">Keluar dari akun aplikasi</div>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-textMuted" />
+        </button>
       </div>
     </div>
   );
