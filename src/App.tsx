@@ -1,7 +1,7 @@
-import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Calculator, CheckSquare, History, Home, Package } from 'lucide-react';
 import clsx from 'clsx';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { seedDatabase } from './db/seed';
 import { db } from './db/db';
 
@@ -31,10 +31,76 @@ function ProtectedRoute({ user, children }: { user: InventorySessionUser | null;
   return children;
 }
 
+function useSimpleBackBehavior(homePath = '/') {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPathRef = useRef(location.pathname);
+  const skipDuplicateHomeRef = useRef(false);
+
+  useEffect(() => {
+    currentPathRef.current = location.pathname;
+    if (location.pathname !== homePath) {
+      skipDuplicateHomeRef.current = false;
+    }
+  }, [homePath, location.pathname]);
+
+  useEffect(() => {
+    const isHomePath = (path: string) => path === homePath;
+    const shouldIgnorePath = (path: string) => path === '/login';
+
+    const handlePopState = () => {
+      window.setTimeout(() => {
+        const path = window.location.pathname;
+        if (shouldIgnorePath(path)) return;
+
+        if (!isHomePath(path)) {
+          skipDuplicateHomeRef.current = true;
+          navigate(homePath, { replace: true });
+          return;
+        }
+
+        if (skipDuplicateHomeRef.current) {
+          skipDuplicateHomeRef.current = false;
+          window.setTimeout(() => window.history.back(), 0);
+        }
+      }, 0);
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target as Element | null;
+      const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || anchor.target || anchor.hasAttribute('download')) return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (shouldIgnorePath(url.pathname)) return;
+
+      const targetPath = `${url.pathname}${url.search}${url.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (targetPath === currentPath) return;
+
+      event.preventDefault();
+      const shouldReplace = !isHomePath(currentPathRef.current) && !isHomePath(url.pathname);
+      navigate(targetPath, { replace: shouldReplace });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('click', handleDocumentClick, true);
+    };
+  }, [homePath, navigate]);
+}
+
 function App() {
   const location = useLocation();
   const [isReady, setIsReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<InventorySessionUser | null>(() => authService.getCurrentUser());
+
+  useSimpleBackBehavior('/');
 
   useEffect(() => {
     seedDatabase()

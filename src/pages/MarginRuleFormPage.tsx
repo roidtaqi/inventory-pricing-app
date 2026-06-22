@@ -153,7 +153,7 @@ export default function MarginRuleFormPage() {
   return (
     <div className="bg-background min-h-screen pb-24">
       <div className="bg-surface border-b border-border p-4 sticky top-0 z-10 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
+        <button onClick={() => navigate('/', { replace: true })} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-textMain" />
         </button>
         <h1 className="min-w-0 flex-1 truncate text-xl font-bold">{isEdit ? 'Edit Margin' : 'Tambah Margin'}</h1>

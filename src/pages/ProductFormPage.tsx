@@ -339,7 +339,7 @@ export default function ProductFormPage() {
     <div className="min-h-screen bg-background pb-24">
       <div className="sticky top-0 z-10 border-b border-border bg-surface">
         <div className="flex items-center gap-3 p-4">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
+          <button onClick={() => navigate('/', { replace: true })} className="p-2 -ml-2 rounded-full hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-textMain" />
           </button>
           <div className="min-w-0 flex-1">
