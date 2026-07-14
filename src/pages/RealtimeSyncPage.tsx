@@ -148,7 +148,7 @@ export default function RealtimeSyncPage() {
               className="input"
               value={url}
               onChange={event => setUrl(event.target.value)}
-              placeholder="wss://pos-server.up.railway.app"
+              placeholder="wss://integrated-pos-sync-server.onrender.com"
             />
           </label>
 
@@ -159,7 +159,7 @@ export default function RealtimeSyncPage() {
                 className="min-w-0 flex-1 rounded-l-lg bg-transparent px-3 py-2 outline-none"
                 value={apiToken}
                 onChange={event => setApiToken(event.target.value)}
-                placeholder="Isi sama seperti SYNC_API_TOKEN di Railway"
+                placeholder="Diatur otomatis dari environment deployment"
                 type={showApiToken ? 'text' : 'password'}
                 autoComplete="off"
               />

@@ -29,8 +29,8 @@ const ensureCoreSettings = async () => {
   await ensureSetting('roundingMode', 'NEAREST_THOUSAND_500_THRESHOLD');
   await ensureSetting('browserNotificationsEnabled', 'false');
   await ensureSetting('realtimeEnabled', 'true');
-  await ensureSetting('realtimeUrl', 'wss://pos-server.up.railway.app');
-  await ensureSetting('realtimeApiToken', 'kastur-sync-2026-Roid-Nawir-8xAq72Lm');
+  await ensureSetting('realtimeUrl', 'wss://integrated-pos-sync-server.onrender.com');
+  await ensureSetting('realtimeApiToken', '');
   await db.appSettings.bulkDelete(['currentUserRole', 'currentUserName']);
 
   const defaultMargin = await db.marginRules.where('ruleType').equals('STORE_DEFAULT').first();

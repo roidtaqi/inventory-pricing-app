@@ -4,6 +4,11 @@ services:
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SYNC_URL
+        value: wss://integrated-pos-sync-server.onrender.com
+      - key: VITE_SYNC_API_TOKEN
+        sync: false
     routes:
       - type: rewrite
         source: /*

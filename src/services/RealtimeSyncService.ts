@@ -19,8 +19,8 @@ interface SalePayload {
   change: number;
 }
 
-const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://pos-server.up.railway.app';
-const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || 'kastur-sync-2026-Roid-Nawir-8xAq72Lm';
+const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://integrated-pos-sync-server.onrender.com';
+const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || '';
 const listeners = new Set<(status: ConnectionStatus) => void>();
 
 let socket: WebSocket | null = null;
@@ -264,8 +264,8 @@ export const realtimeSyncService = {
     const settings = await db.appSettings.bulkGet(['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken']);
     return {
       enabled: settings[0]?.value !== 'false',
-      url: settings[1]?.value || DEFAULT_URL,
-      apiToken: settings[2]?.value || DEFAULT_API_TOKEN
+      url: import.meta.env.VITE_SYNC_URL || settings[1]?.value || DEFAULT_URL,
+      apiToken: import.meta.env.VITE_SYNC_API_TOKEN || settings[2]?.value || DEFAULT_API_TOKEN
     };
   },
 
