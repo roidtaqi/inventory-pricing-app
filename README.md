@@ -1,5 +1,7 @@
 # Kalkulator Tekad Mandiri
 
+Untuk deployment gratis tanpa kartu kredit, gunakan Cloudflare Pages untuk frontend, Back4app untuk sync server, dan Neon untuk PostgreSQL. Panduan lengkap tersedia di repo `integrated-pos-app` pada `DEPLOY_FREE.md`.
+
 Mobile-first PWA untuk membantu owner/admin toko retail, sembako, grosir, dan minimarket kecil menghitung harga jual, mengelola inventaris produk, membuat draft perubahan harga, melakukan approval, dan menyimpan riwayat perubahan harga.
 
 Aplikasi ini bukan POS/kasir. Harga aktif hanya berubah setelah approval.
