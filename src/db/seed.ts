@@ -29,7 +29,7 @@ const ensureCoreSettings = async () => {
   await ensureSetting('roundingMode', 'NEAREST_THOUSAND_500_THRESHOLD');
   await ensureSetting('browserNotificationsEnabled', 'false');
   await ensureSetting('realtimeEnabled', 'true');
-  await ensureSetting('realtimeUrl', 'wss://integrated-pos-sync-server.onrender.com');
+  await ensureSetting('realtimeUrl', 'wss://kastur-sync.roidtaqi.workers.dev');
   await ensureSetting('realtimeApiToken', '');
   await db.appSettings.bulkDelete(['currentUserRole', 'currentUserName']);
 

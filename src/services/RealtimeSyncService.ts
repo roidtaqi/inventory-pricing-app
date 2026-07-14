@@ -19,7 +19,7 @@ interface SalePayload {
   change: number;
 }
 
-const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://integrated-pos-sync-server.onrender.com';
+const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://kastur-sync.roidtaqi.workers.dev';
 const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || '';
 const listeners = new Set<(status: ConnectionStatus) => void>();
 

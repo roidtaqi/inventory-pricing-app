@@ -148,7 +148,7 @@ export default function RealtimeSyncPage() {
               className="input"
               value={url}
               onChange={event => setUrl(event.target.value)}
-              placeholder="wss://integrated-pos-sync-server.onrender.com"
+              placeholder="wss://kastur-sync.roidtaqi.workers.dev"
             />
           </label>
 
