@@ -23,7 +23,7 @@ const menuItems = [
   },
   {
     to: '/realtime-sync',
-    title: 'Real-time Sync',
+    title: 'Sinkronisasi',
     description: 'Kirim harga aktif dan terima sales POS',
     icon: RefreshCw,
   },

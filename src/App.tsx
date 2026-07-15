@@ -105,11 +105,14 @@ function App() {
   useEffect(() => {
     seedDatabase()
       .then(async () => {
+        await realtimeSyncService.autoStart();
+        await realtimeSyncService.pullPosAuthSnapshot().catch(error => {
+          console.warn('POS auth sync skipped', error);
+        });
         await authService.refreshCurrentUser();
         const refreshedUser = authService.getCurrentUser();
         setCurrentUser(refreshedUser);
         setIsReady(true);
-        void realtimeSyncService.autoStart();
         if (refreshedUser && !authService.canApprove(refreshedUser)) {
           void db.priceCalculations
             .where('status')
@@ -123,10 +126,6 @@ function App() {
               }
             });
         }
-        void realtimeSyncService.pullPosAuthSnapshot()
-          .then(() => authService.refreshCurrentUser())
-          .then(() => setCurrentUser(authService.getCurrentUser()))
-          .catch(error => console.warn('POS auth sync skipped', error));
       })
       .catch(console.error);
   }, []);

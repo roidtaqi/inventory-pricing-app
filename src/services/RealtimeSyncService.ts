@@ -21,6 +21,8 @@ interface SalePayload {
 
 const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://kastur-sync.roidtaqi.workers.dev';
 const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || '';
+const LAST_INVENTORY_SNAPSHOT_SETTING = 'inventoryLastCloudSnapshotAt';
+const INVENTORY_LOCAL_DIRTY_SETTING = 'inventoryCloudLocalDirty';
 const listeners = new Set<(status: ConnectionStatus) => void>();
 
 let socket: WebSocket | null = null;
@@ -34,7 +36,7 @@ let pushingCloudSnapshot = false;
 let pullingCloudSnapshot = false;
 let localCatalogDirty = false;
 let lastImportedCloudSnapshotAt: string | null = null;
-const AUTO_PULL_INTERVAL_MS = 20000;
+const AUTO_PULL_INTERVAL_MS = 15000;
 const CLOUD_PUSH_DEBOUNCE_MS = 900;
 const DEVICE_SETTING_KEYS = new Set([
   'realtimeEnabled',
@@ -43,6 +45,8 @@ const DEVICE_SETTING_KEYS = new Set([
   'currentUserRole',
   'currentUserName',
   'browserNotificationsEnabled',
+  LAST_INVENTORY_SNAPSHOT_SETTING,
+  INVENTORY_LOCAL_DIRTY_SETTING,
 ]);
 
 function emit(nextStatus: ConnectionStatus) {
@@ -92,7 +96,7 @@ async function buildCatalogSnapshot() {
     csvImportBatches: await db.csvImportBatches.toArray(),
     csvImportRows: await db.csvImportRows.toArray(),
     posSales: await db.posSales.toArray(),
-    realtimeSyncLogs: await db.realtimeSyncLogs.toArray(),
+    realtimeSyncLogs: [],
     appSettings: (await db.appSettings.toArray()).filter(setting => !DEVICE_SETTING_KEYS.has(setting.key))
   };
 }
@@ -119,6 +123,29 @@ function buildAuthHeaders(apiToken?: string) {
   return headers;
 }
 
+async function getLastImportedCloudSnapshotAt() {
+  if (lastImportedCloudSnapshotAt) return lastImportedCloudSnapshotAt;
+  lastImportedCloudSnapshotAt = (await db.appSettings.get(LAST_INVENTORY_SNAPSHOT_SETTING))?.value || null;
+  return lastImportedCloudSnapshotAt;
+}
+
+async function setLastImportedCloudSnapshotAt(updatedAt?: string | null) {
+  if (!updatedAt) return;
+  lastImportedCloudSnapshotAt = updatedAt;
+  await db.appSettings.put({ key: LAST_INVENTORY_SNAPSHOT_SETTING, value: updatedAt });
+}
+
+async function setLocalCatalogDirty(dirty: boolean) {
+  localCatalogDirty = dirty;
+  await db.appSettings.put({ key: INVENTORY_LOCAL_DIRTY_SETTING, value: String(dirty) });
+}
+
+async function isLocalCatalogDirty() {
+  if (localCatalogDirty) return true;
+  localCatalogDirty = (await db.appSettings.get(INVENTORY_LOCAL_DIRTY_SETTING))?.value === 'true';
+  return localCatalogDirty;
+}
+
 async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
   const appSettings = (snapshot.appSettings || []).filter(setting => !DEVICE_SETTING_KEYS.has(setting.key));
 
@@ -137,7 +164,6 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
       db.csvImportBatches,
       db.csvImportRows,
       db.posSales,
-      db.realtimeSyncLogs,
       db.appSettings,
     ],
     async () => {
@@ -154,7 +180,6 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
         db.csvImportBatches.clear(),
         db.csvImportRows.clear(),
         db.posSales.clear(),
-        db.realtimeSyncLogs.clear(),
       ]);
 
       const existingSettings = await db.appSettings.toArray();
@@ -175,7 +200,6 @@ async function importCatalogSnapshot(snapshot: Partial<CatalogSnapshot>) {
       if (snapshot.csvImportBatches?.length) await db.csvImportBatches.bulkPut(snapshot.csvImportBatches);
       if (snapshot.csvImportRows?.length) await db.csvImportRows.bulkPut(snapshot.csvImportRows);
       if (snapshot.posSales?.length) await db.posSales.bulkPut(snapshot.posSales);
-      if (snapshot.realtimeSyncLogs?.length) await db.realtimeSyncLogs.bulkPut(snapshot.realtimeSyncLogs);
       if (appSettings.length) await db.appSettings.bulkPut(appSettings);
     }
   );
@@ -192,6 +216,7 @@ function scheduleCloudSnapshotPush(delay = CLOUD_PUSH_DEBOUNCE_MS) {
   if (typeof window === 'undefined') return;
 
   localCatalogDirty = true;
+  void db.appSettings.put({ key: INVENTORY_LOCAL_DIRTY_SETTING, value: 'true' });
   window.clearTimeout(cloudPushTimer);
   cloudPushTimer = window.setTimeout(async () => {
     if (pushingCloudSnapshot) return;
@@ -199,7 +224,6 @@ function scheduleCloudSnapshotPush(delay = CLOUD_PUSH_DEBOUNCE_MS) {
     pushingCloudSnapshot = true;
     try {
       await realtimeSyncService.pushCloudSnapshot();
-      localCatalogDirty = false;
     } catch (error) {
       console.warn('Auto cloud snapshot push failed', error);
       await logSync('OUT', 'cloud.snapshot', 'FAILED', 'Auto upload cloud gagal');
@@ -210,7 +234,11 @@ function scheduleCloudSnapshotPush(delay = CLOUD_PUSH_DEBOUNCE_MS) {
 }
 
 async function autoPullCloudSnapshot() {
-  if (pullingCloudSnapshot || pushingCloudSnapshot || localCatalogDirty) return;
+  if (pullingCloudSnapshot || pushingCloudSnapshot) return;
+  if (await isLocalCatalogDirty()) {
+    scheduleCloudSnapshotPush(0);
+    return;
+  }
 
   pullingCloudSnapshot = true;
   try {
@@ -260,12 +288,15 @@ function scheduleReconnect() {
 }
 
 export const realtimeSyncService = {
+  getAutoPullIntervalMs() {
+    return AUTO_PULL_INTERVAL_MS;
+  },
+
   async getConfig(): Promise<RealtimeConfig> {
-    const settings = await db.appSettings.bulkGet(['realtimeEnabled', 'realtimeUrl', 'realtimeApiToken']);
     return {
-      enabled: settings[0]?.value !== 'false',
-      url: import.meta.env.VITE_SYNC_URL || settings[1]?.value || DEFAULT_URL,
-      apiToken: import.meta.env.VITE_SYNC_API_TOKEN || settings[2]?.value || DEFAULT_API_TOKEN
+      enabled: true,
+      url: DEFAULT_URL,
+      apiToken: DEFAULT_API_TOKEN
     };
   },
 
@@ -289,19 +320,33 @@ export const realtimeSyncService = {
 
   async autoStart() {
     const config = await this.getConfig();
-    this.startAutoCloudPull();
     if (config.enabled) {
       await this.connect(config.url);
     }
+    try {
+      if (await isLocalCatalogDirty()) {
+        await this.pushCloudSnapshot();
+      } else {
+        const result = await this.pullCloudSnapshot(undefined, undefined, { automated: true });
+        if (!result.success && await db.products.count() > 0) {
+          await this.pushCloudSnapshot();
+        }
+      }
+    } catch (error) {
+      console.warn('Initial Inventory cloud sync skipped', error);
+    }
+    this.startAutoCloudPull(false);
   },
 
-  startAutoCloudPull() {
+  startAutoCloudPull(runImmediately = true) {
     if (typeof window === 'undefined') return;
 
     window.clearInterval(autoPullTimer);
-    window.setTimeout(() => {
-      void autoPullCloudSnapshot();
-    }, 2500);
+    if (runImmediately) {
+      window.setTimeout(() => {
+        void autoPullCloudSnapshot();
+      }, 2500);
+    }
     autoPullTimer = window.setInterval(() => {
       void autoPullCloudSnapshot();
     }, AUTO_PULL_INTERVAL_MS);
@@ -412,7 +457,9 @@ export const realtimeSyncService = {
       throw new Error(`Cloud sync gagal: ${response.status}`);
     }
 
-    localCatalogDirty = false;
+    const data = await response.json();
+    await setLocalCatalogDirty(false);
+    await setLastImportedCloudSnapshotAt(data.updated_at);
     await logSync('OUT', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot tersimpan: ${catalog.products.length} produk`);
     return { success: true, count: catalog.products.length };
   },
@@ -438,7 +485,11 @@ export const realtimeSyncService = {
     const baseUrl = toHttpUrl(customUrl || config.url);
     const apiToken = customToken ?? config.apiToken;
 
-    const response = await fetch(`${baseUrl}/api/inventory/snapshot`, {
+    const snapshotUrl = new URL(`${baseUrl}/api/inventory/snapshot`);
+    const lastSeen = options.automated ? await getLastImportedCloudSnapshotAt() : null;
+    if (lastSeen) snapshotUrl.searchParams.set('since', lastSeen);
+
+    const response = await fetch(snapshotUrl, {
       headers: apiToken ? { 'x-sync-token': apiToken } : undefined
     });
 
@@ -447,6 +498,16 @@ export const realtimeSyncService = {
     }
 
     const data = await response.json();
+    if (data.not_modified) {
+      return {
+        success: true,
+        products: 0,
+        productUnits: 0,
+        priceCalculations: 0,
+        skipped: true,
+      };
+    }
+
     if (!data.snapshot) {
       return {
         success: false,
@@ -457,8 +518,19 @@ export const realtimeSyncService = {
       };
     }
 
+    if (options.automated && await isLocalCatalogDirty()) {
+      return {
+        success: false,
+        products: 0,
+        productUnits: 0,
+        priceCalculations: 0,
+        skipped: true,
+        message: 'Perubahan lokal akan di-upload sebelum data cloud diterapkan.',
+      };
+    }
+
     const updatedAt = data.updated_at || data.event?.received_at || data.event?.created_at || null;
-    if (options.automated && updatedAt && updatedAt === lastImportedCloudSnapshotAt) {
+    if (options.automated && updatedAt && updatedAt === await getLastImportedCloudSnapshotAt()) {
       return {
         success: true,
         products: data.stats?.products || 0,
@@ -469,9 +541,32 @@ export const realtimeSyncService = {
     }
 
     const result = await importCatalogSnapshot(data.snapshot);
-    lastImportedCloudSnapshotAt = updatedAt;
+    await setLastImportedCloudSnapshotAt(updatedAt);
     await logSync('IN', 'cloud.snapshot', 'SUCCESS', `Cloud snapshot diterima dan katalog lokal disamakan: ${result.products} produk`);
     return { success: true, ...result };
+  },
+
+  async syncNow() {
+    const config = await this.getConfig();
+    if (status !== 'CONNECTED' && status !== 'CONNECTING') {
+      await this.connect(config.url);
+    }
+
+    const state = await this.getCloudState();
+    const hasLocalChanges = await isLocalCatalogDirty();
+    const catalogResult = !state.latest_catalog || hasLocalChanges
+      ? await this.pushCloudSnapshot()
+      : await this.pullCloudSnapshot();
+
+    const authResult = await this.pullPosAuthSnapshot().catch(() => ({ success: false, users: 0, roles: 0 }));
+    return {
+      success: catalogResult.success,
+      direction: !state.latest_catalog || hasLocalChanges ? 'uploaded' : 'downloaded',
+      products: 'count' in catalogResult ? catalogResult.count : catalogResult.products,
+      productUnits: 'productUnits' in catalogResult ? catalogResult.productUnits : 0,
+      users: authResult.users,
+      roles: authResult.roles,
+    };
   },
 
   async pullPosAuthSnapshot(customUrl?: string, customToken?: string) {

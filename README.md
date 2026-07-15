@@ -21,61 +21,24 @@ npm install
 npm run dev
 ```
 
-## Real-time Sync ke Integrated POS App
+## Sinkronisasi Cloud
 
-Aplikasi ini bisa mengirim catalog/harga aktif secara real-time ke Integrated POS App dan menerima sales event dari POS melalui sync server WebSocket yang tersedia di repo POS.
+Data pusat disimpan di Neon PostgreSQL melalui Cloudflare Worker, Hyperdrive, dan Durable Object WebSocket. IndexedDB tetap digunakan sebagai cache perangkat dan penyimpanan offline, bukan sebagai satu-satunya database.
 
-Jalankan sync server dari repo POS:
+Alur produksi:
 
-```bash
-cd ../integrated-pos-app
-npm run sync:server
-```
+- Inventory menjadi sumber produk, satuan, harga, margin, approval, dan riwayat harga.
+- POS menjadi sumber transaksi, pembayaran, shift, kas, stok, pelanggan, user, role, dan audit.
+- Perubahan lokal otomatis diunggah dan perubahan cloud diperiksa setiap 15 detik.
+- Conditional snapshot membuat pemeriksaan berkala hanya membaca metadata ketika cloud belum berubah.
+- Halaman `Sinkronisasi` hanya menyediakan tombol `Sinkronkan Sekarang` untuk memaksa upload/download saat itu juga.
+- Log dan antrean sinkronisasi tetap lokal pada perangkat agar tidak menimpa antrean perangkat lain.
 
-Lalu jalankan Inventory Pricing App:
-
-```bash
-cd ../inventory-pricing-app
-npm run dev
-```
-
-Alur:
-
-1. Buka `Home -> Data & Pengaturan -> Sync`.
-2. Isi URL `ws://localhost:8787`.
-3. Aktifkan real-time sync.
-4. Klik `Simpan & Connect`.
-5. Klik `Publish Catalog Sekarang` untuk mengirim produk, satuan, dan harga aktif ke POS.
-6. Transaksi POS yang masuk akan tersimpan di tabel lokal `posSales` dan tampil di halaman Real-time Sync.
-
-Catatan arsitektur:
-
-- Inventory Pricing App tetap source of truth untuk produk, satuan, dan harga aktif.
-- POS tetap sales execution layer.
-- Sync server lokal menyimpan event di `.sync-data/realtime-sync-state.json` pada repo POS.
-- Untuk production, WebSocket server ini perlu diberi auth, tenant/outlet scoping, retry policy, dan conflict resolution.
-
-## Cloud Sync Multi-device
-
-Untuk membuat data Inventory terlihat sama di laptop dan HP, gunakan sync server yang sudah berjalan di Railway.
-
-Contoh URL:
+Default production endpoint:
 
 ```txt
-wss://integrated-pos-sync-server.onrender.com
+wss://kastur-sync.roidtaqi.workers.dev
 ```
-
-Di halaman `Home -> Data & Pengaturan -> Sync`:
-
-1. Isi URL sync server.
-2. Pada deployment Render, URL dan API token diatur otomatis melalui environment build.
-3. Klik `Cek Cloud` untuk memastikan URL/token sudah benar.
-4. Di laptop/perangkat yang datanya paling lengkap, klik `Upload Cloud`.
-5. Di HP/perangkat lain, klik `Ambil Cloud`.
-
-`Upload Cloud` menyimpan snapshot Inventory ke sync server. `Ambil Cloud` mengambil snapshot cloud dan menyamakan katalog lokal perangkat tersebut dengan data cloud, sehingga sisa data contoh atau data lama di device baru tidak ikut tercampur.
-
-Jika `Cek Cloud` menampilkan cloud masih kosong, berarti belum ada perangkat utama yang berhasil melakukan `Upload Cloud`, atau URL/token belum sama dengan konfigurasi sync server Railway.
 
 Data yang ikut disync:
 
@@ -313,6 +276,14 @@ Nilai `pricing_mode` mendukung `AUTO_MARGIN`, `MANUAL_PRICE`, `LOCKED_PRICE`. Ni
 Seed data mencakup kategori seperti Mie Instan, Minuman, Beras, Minyak, Gula, Rokok, Telur, dan Bumbu Dapur, plus contoh produk Indomie Goreng, Mie Sedaap Soto, Aqua 600ml, Beras Ramos 5kg, Minyak Goreng 1L, Gula Pasir 1kg, dan Telur Ayam 1kg.
 
 ## Changelog
+
+### Unreleased - 2026-07-15
+
+- Menjadikan Neon PostgreSQL sebagai penyimpanan pusat untuk snapshot Inventory dan POS.
+- Menambahkan sinkronisasi otomatis dua arah dengan WebSocket dan rekonsiliasi conditional setiap 15 detik.
+- Menyederhanakan halaman Sinkronisasi menjadi satu tombol `Sinkronkan Sekarang` tanpa input URL/token.
+- Menyimpan penanda perubahan Inventory secara lokal agar perubahan offline dicoba upload kembali setelah aplikasi dibuka ulang.
+- Menjaga log dan antrean sinkronisasi sebagai data khusus perangkat agar tidak tertimpa antar-device.
 
 ### Unreleased - 2026-06-17
 
